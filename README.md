@@ -2,60 +2,132 @@
 
 AI-powered git commit message generator using OpenAI API.
 
+## Features
+
+- Automatically generates clear and descriptive commit messages
+- Follows conventional commit format
+- Supports multiple OpenAI models
+- Flexible configuration options
+- Command-line interface with various options
+- Detailed logging system
+- Auto-commit support
+- Branch context awareness
+
 ## Installation
 
 ```bash
 pip install git+https://github.com/zero0043/py-ai-commit.git
 ```
 
-## Configuration
-
-You can configure the tool using either a `.aicommit` file or a `.env` file in your project root or any parent directory.
-
-### Using .aicommit file:
-
-```
-OPENAI_API_KEY=your_api_key
-OPENAI_BASE_URL=your_api_base_url
-OPENAI_MODEL=your_model_name
-LOG_PATH=.commitLogs
-AUTO_COMMIT=true  # Optional: set to true to commit automatically without confirmation
-```
-
-### Using .env file:
-
-```
-OPENAI_API_KEY=your_api_key
-OPENAI_BASE_URL=your_api_base_url
-OPENAI_MODEL=your_model_name
-LOG_PATH=.commitLogs
-AUTO_COMMIT=true  # Optional: set to true to commit automatically without confirmation
-```
-
-The tool will first look for a `.aicommit` file, and if not found, it will look for a `.env` file. The search will continue in parent directories until a configuration file is found.
-
-### Configuration Options
-
-- `OPENAI_API_KEY`: Your OpenAI API key (required)
-- `OPENAI_BASE_URL`: The base URL for the OpenAI API (required)
-- `OPENAI_MODEL`: The model to use for generating commit messages (required)
-- `LOG_PATH`: Directory to store log files (optional, defaults to `.commitLogs`)
-- `AUTO_COMMIT`: Set to `true` to automatically commit without confirmation (optional, defaults to `false`)
-
 ## Usage
 
-In any git repository:
+Basic usage in any git repository:
 
 ```bash
 ai-commit
 ```
 
-This will:
-1. Analyze your uncommitted changes
-2. Generate a commit message using AI
-3. If `AUTO_COMMIT` is true, automatically commit the changes
-4. Otherwise, ask for confirmation before committing
-5. Log the process in the specified log directory
+Command line options:
+
+```bash
+ai-commit [-h] [-y] [-c CONFIG] [-m MODEL] [--dry-run] [-v]
+
+options:
+  -h, --help            Show this help message
+  -y, --yes            Skip confirmation and commit directly
+  -c CONFIG, --config CONFIG
+                      Path to specific config file
+  -m MODEL, --model MODEL
+                      Override AI model from config
+  --dry-run           Generate message without committing
+  -v, --verbose       Show verbose output
+```
+
+## Configuration
+
+You can configure the tool using either a `.aicommit` file or a `.env` file in your project root or any parent directory.
+
+### Configuration Files
+
+1. Create a `.aicommit` or `.env` file:
+   - Copy `.aicommit_template` to `.aicommit`
+   - Edit the file with your settings
+
+### Configuration Options
+
+```ini
+OPENAI_API_KEY=your_api_key          # Required: Your OpenAI API key
+OPENAI_BASE_URL=your_api_base_url    # Required: OpenAI API base URL
+OPENAI_MODEL=your_model_name         # Required: OpenAI model to use (e.g., gpt-3.5-turbo)
+LOG_PATH=.commitLogs                 # Optional: Directory for log files (default: .commitLogs)
+AUTO_COMMIT=true                     # Optional: Skip confirmation (default: false)
+```
+
+The tool will search for configuration files in the following order:
+1. Command-line specified config file (`-c` option)
+2. `.aicommit` in current or parent directories
+3. `.env` in current or parent directories
+
+### Configuration Priority
+
+1. Command-line arguments (highest priority)
+2. Configuration file settings
+3. Default values (lowest priority)
+
+## Features in Detail
+
+### Auto-Commit Mode
+
+Enable auto-commit in one of three ways:
+1. Use `-y` or `--yes` flag: `ai-commit -y`
+2. Set `AUTO_COMMIT=true` in config file
+3. Interactive confirmation (default)
+
+### Dry Run Mode
+
+Use `--dry-run` to generate a commit message without actually committing:
+```bash
+ai-commit --dry-run
+```
+
+### Model Selection
+
+Override the model from command line:
+```bash
+ai-commit -m gpt-4
+```
+
+### Verbose Logging
+
+Enable detailed logging:
+```bash
+ai-commit -v
+```
+
+### Branch Context
+
+The tool automatically includes the current branch name in the commit message generation context for more relevant messages.
+
+## Logging
+
+Logs are stored in the configured `LOG_PATH` directory (default: `.commitLogs`):
+- Daily log files: `commit_YYYYMMDD.log`
+- Includes detailed information about:
+  - Program startup
+  - Configuration loading
+  - Git operations
+  - API calls
+  - Commit process
+  - Errors and warnings
+
+## Error Handling
+
+The tool includes robust error handling for:
+- Missing configuration
+- Invalid API keys
+- Network issues (with automatic retries)
+- Git repository errors
+- Invalid staged changes
 
 ## License
 
