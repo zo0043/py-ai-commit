@@ -6,6 +6,8 @@ from datetime import datetime
 import logging
 import re
 import sys
+import argparse
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -34,6 +36,21 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='AI-powered git commit message generator')
+    parser.add_argument('-y', '--yes', action='store_true',
+                      help='Skip confirmation and commit directly')
+    parser.add_argument('-c', '--config', type=str,
+                      help='Path to specific config file')
+    parser.add_argument('-m', '--model', type=str,
+                      help='Override AI model from config')
+    parser.add_argument('--dry-run', action='store_true',
+                      help='Generate message without committing')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                      help='Show verbose output')
+    return parser.parse_args()
+
 def setup_logging(log_path):
     """Setup logging configuration with enhanced formatting"""
     if not os.path.exists(log_path):
@@ -43,7 +60,7 @@ def setup_logging(log_path):
     
     # 创建logger
     logger = logging.getLogger('ai_commit')
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     
     # 清除现有的handlers
     if logger.handlers:
@@ -73,17 +90,29 @@ def log_with_details(logger, level, message, details=None):
     extra = {'details': details if details else 'No additional details'}
     logger.log(level, message, extra=extra)
 
-def find_config_files():
+def find_config_files(config_path=None):
     """Find .aicommit or .env file in current or parent directories"""
+    if config_path:
+        config_file = Path(config_path)
+        if config_file.exists():
+            return ('custom', config_file)
+        else:
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+    
     current = Path.cwd()
     while current != current.parent:
         aicommit_file = current / '.aicommit'
         env_file = current / '.env'
+        template_file = current / '.aicommit_template'
         
         if aicommit_file.exists():
             return ('aicommit', aicommit_file)
         elif env_file.exists():
             return ('env', env_file)
+        elif template_file.exists():
+            # 如果找到模板文件，提示用户进行配置
+            print("Found .aicommit_template file. Please configure it and rename to .aicommit")
+            sys.exit(1)
             
         current = current.parent
     return (None, None)
@@ -98,9 +127,9 @@ def load_aicommit_config(config_file):
                 config[key] = value
     return config
 
-def load_config(logger):
+def load_config(logger, config_path=None):
     """Load configuration from .aicommit or .env file"""
-    config_type, config_file = find_config_files()
+    config_type, config_file = find_config_files(config_path)
     
     if config_type is None:
         log_with_details(logger, logging.ERROR,
@@ -201,6 +230,30 @@ def get_git_diff(logger):
         )
         return None
 
+def validate_git_staged_changes(logger):
+    """Validate that there are staged changes for commit"""
+    try:
+        staged = subprocess.run(['git', 'diff', '--cached', '--quiet'],
+                              capture_output=True)
+        if staged.returncode == 0:
+            log_with_details(logger, logging.WARNING,
+                "No staged changes",
+                "Please stage your changes using 'git add' first"
+            )
+            return False
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def get_branch_name():
+    """Get current git branch name"""
+    try:
+        result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                              capture_output=True, text=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        return None
+
 def extract_commit_message(text):
     """Extract commit message from between ``` marks"""
     pattern = r'```(?:\w*\n)?(.*?)```'
@@ -216,11 +269,16 @@ def generate_commit_message(diff_text, config, logger):
         base_url=config['OPENAI_BASE_URL']
     )
 
+    # Get current branch name for context
+    branch_name = get_branch_name()
+    branch_context = f"Current branch: {branch_name}\n" if branch_name else ""
+
     prompt = f"""Please analyze the following git diff and generate a concise and descriptive commit message.
 The commit message should follow conventional commit format and be in English.
 Focus on WHAT changed and WHY, not HOW.
 Your response should only contain the commit message wrapped in ```.
 
+{branch_context}
 Git diff:
 {diff_text}
 
@@ -234,13 +292,28 @@ type(scope): description"""
             f"Prompt length: {len(prompt)} characters"
         )
         
-        response = client.chat.completions.create(
-            model=config['OPENAI_MODEL'],
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant that generates clear and concise git commit messages. Wrap your commit message in ```"},
-                {"role": "user", "content": prompt}
-            ]
-        )
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                response = client.chat.completions.create(
+                    model=config['OPENAI_MODEL'],
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that generates clear and concise git commit messages. Wrap your commit message in ```"},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                break
+            except Exception as e:
+                retry_count += 1
+                if retry_count == max_retries:
+                    raise e
+                log_with_details(logger, logging.WARNING,
+                    f"API call failed (attempt {retry_count}/{max_retries})",
+                    f"Error: {str(e)}\nRetrying..."
+                )
+                time.sleep(1)  # 添加延迟避免频繁请求
         
         raw_message = response.choices[0].message.content.strip()
         commit_message = extract_commit_message(raw_message)
@@ -285,25 +358,46 @@ def commit_changes(commit_message, logger):
 
 def main():
     try:
+        args = parse_args()
+        
         # Setup initial logging with default path
         logger = setup_logging('.commitLogs')
+        if args.verbose:
+            logger.setLevel(logging.DEBUG)
+            
         log_with_details(logger, logging.INFO,
             "Starting AI Commit",
             f"Process ID: {os.getpid()}\n"
-            f"Working directory: {os.getcwd()}"
+            f"Working directory: {os.getcwd()}\n"
+            f"Command arguments: {vars(args)}"
         )
         
         # Load configuration
-        config = load_config(logger)
+        config = load_config(logger, args.config)
+        
+        # Override model if specified in command line
+        if args.model:
+            config['OPENAI_MODEL'] = args.model
+            log_with_details(logger, logging.INFO,
+                "Model override",
+                f"Using model from command line: {args.model}"
+            )
         
         # Update logging path if specified in config
         log_path = config.get('LOG_PATH', '.commitLogs')
         if log_path != '.commitLogs':
             logger = setup_logging(log_path)
+            if args.verbose:
+                logger.setLevel(logging.DEBUG)
             log_with_details(logger, logging.INFO,
                 "Updated logging path",
                 f"New log path: {log_path}"
             )
+        
+        # Validate git repository and changes
+        if not validate_git_staged_changes(logger):
+            print("No staged changes found. Please use 'git add' to stage your changes first.")
+            return
         
         # Get git diff
         diff = get_git_diff(logger)
@@ -321,12 +415,23 @@ def main():
         print(commit_message)
         print("-" * 50)
         
-        # Check if auto commit is enabled
-        auto_commit = config.get('AUTO_COMMIT', False)
-        if auto_commit:
+        # Check if we should commit
+        should_commit = (
+            args.yes or  # Command line override
+            (not args.dry_run and config.get('AUTO_COMMIT', False))  # Config setting and not dry run
+        )
+        
+        if args.dry_run:
+            log_with_details(logger, logging.INFO,
+                "Dry run mode",
+                "Skipping commit as requested"
+            )
+            return
+            
+        if should_commit:
             log_with_details(logger, logging.INFO,
                 "Auto commit enabled",
-                "Proceeding with automatic commit"
+                f"Source: {'command line' if args.yes else 'config file'}"
             )
             commit_changes(commit_message, logger)
         else:
