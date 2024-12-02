@@ -1,0 +1,5 @@
+OPENAI_API_KEY=xxx  
+OPENAI_BASE_URL=xxx
+OPENAI_MODEL=xxx
+LOG_PATH=.commitLogs
+AUTO_COMMIT=true
