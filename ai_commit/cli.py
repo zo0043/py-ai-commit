@@ -150,13 +150,14 @@ def load_config(logger, config_path=None):
         else:  # env
             load_dotenv(config_file)
             # 从环境变量中获取配置
-            for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT']:
+            for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH']:
                 if value := os.getenv(key):
                     config[key] = value
         
-        # Convert AUTO_COMMIT string to boolean
-        if 'AUTO_COMMIT' in config:
-            config['AUTO_COMMIT'] = config['AUTO_COMMIT'].lower() == 'true'
+        # Convert AUTO_COMMIT and AUTO_PUSH strings to boolean
+        for key in ['AUTO_COMMIT', 'AUTO_PUSH']:
+            if key in config:
+                config[key] = config[key].lower() == 'true'
         
         log_with_details(logger, logging.DEBUG,
             "Configuration loaded successfully",
@@ -356,6 +357,40 @@ def commit_changes(commit_message, logger):
         )
         return False
 
+def push_changes(logger):
+    """Push committed changes to remote repository"""
+    try:
+        # 获取当前分支名
+        branch_name = get_branch_name()
+        if not branch_name:
+            log_with_details(logger, logging.ERROR,
+                "Failed to get branch name",
+                "Could not determine current branch for push"
+            )
+            return False
+
+        # 执行 git push
+        result = subprocess.run(['git', 'push', 'origin', branch_name],
+                             capture_output=True, text=True)
+        if result.returncode == 0:
+            log_with_details(logger, logging.INFO,
+                "Changes pushed successfully",
+                f"Push output:\n{result.stdout}"
+            )
+            return True
+        else:
+            log_with_details(logger, logging.ERROR,
+                "Failed to push changes",
+                f"Error output:\n{result.stderr}"
+            )
+            return False
+    except Exception as e:
+        log_with_details(logger, logging.ERROR,
+            "Error during push",
+            f"Exception: {str(e)}"
+        )
+        return False
+
 def main():
     try:
         args = parse_args()
@@ -433,12 +468,26 @@ def main():
                 "Auto commit enabled",
                 f"Source: {'command line' if args.yes else 'config file'}"
             )
-            commit_changes(commit_message, logger)
+            if commit_changes(commit_message, logger):
+                # 如果提交成功且启用了自动推送，则执行推送
+                if config.get('AUTO_PUSH', False):
+                    log_with_details(logger, logging.INFO,
+                        "Auto push enabled",
+                        "Attempting to push changes to remote"
+                    )
+                    push_changes(logger)
         else:
             # Ask user if they want to commit with this message
             response = input("\nWould you like to commit with this message? (y/N): ")
             if response.lower() == 'y':
-                commit_changes(commit_message, logger)
+                if commit_changes(commit_message, logger):
+                    # 如果提交成功且启用了自动推送，则执行推送
+                    if config.get('AUTO_PUSH', False):
+                        log_with_details(logger, logging.INFO,
+                            "Auto push enabled",
+                            "Attempting to push changes to remote"
+                        )
+                        push_changes(logger)
             else:
                 log_with_details(logger, logging.INFO,
                     "Commit cancelled by user",
