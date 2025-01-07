@@ -11,6 +11,7 @@ AI-powered git commit message generator using OpenAI API.
 - Command-line interface with various options
 - Detailed logging system
 - Auto-commit support
+- Auto-push support
 - Branch context awareness
 
 ## Installation
@@ -61,6 +62,7 @@ OPENAI_BASE_URL=your_api_base_url    # Required: OpenAI API base URL
 OPENAI_MODEL=your_model_name         # Required: OpenAI model to use (e.g., gpt-3.5-turbo)
 LOG_PATH=.commitLogs                 # Optional: Directory for log files (default: .commitLogs)
 AUTO_COMMIT=true                     # Optional: Skip confirmation (default: false)
+AUTO_PUSH=true                       # Optional: Auto push after commit (default: false)
 ```
 
 The tool will search for configuration files in the following order:
@@ -82,6 +84,14 @@ Enable auto-commit in one of three ways:
 1. Use `-y` or `--yes` flag: `ai-commit -y`
 2. Set `AUTO_COMMIT=true` in config file
 3. Interactive confirmation (default)
+
+### Auto-Push Mode
+
+When enabled with `AUTO_PUSH=true`, the tool will:
+1. Automatically push changes to remote after successful commit
+2. Use current branch name for pushing
+3. Only push if commit is successful
+4. Log push operations and any errors
 
 ### Dry Run Mode
 
@@ -118,6 +128,7 @@ Logs are stored in the configured `LOG_PATH` directory (default: `.commitLogs`):
   - Git operations
   - API calls
   - Commit process
+  - Push operations
   - Errors and warnings
 
 ## Error Handling
@@ -128,6 +139,7 @@ The tool includes robust error handling for:
 - Network issues (with automatic retries)
 - Git repository errors
 - Invalid staged changes
+- Push failures
 
 ## License
 
