@@ -1,2 +1,0 @@
-[console_scripts]
-ai-commit = ai_commit.cli:main
