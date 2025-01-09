@@ -17,7 +17,7 @@ AI-powered git commit message generator using OpenAI API.
 ## Installation
 
 ```bash
-pip install git+https://github.com/zero0043/py-ai-commit.git
+pip install git+https://github.com/zo0043/py-ai-commit.git
 ```
 
 ## Usage
