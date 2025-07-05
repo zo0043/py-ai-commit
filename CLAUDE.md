@@ -101,11 +101,16 @@ cat .commitLogs/commit_$(date +%Y%m%d).log
 
 ### Configuration System
 
-The tool uses a hierarchical configuration system:
+The tool uses a hierarchical configuration system with the following priority (highest to lowest):
 1. Command-line arguments (highest priority)
-2. `.aicommit` file (key=value format)
-3. `.env` file (dotenv format)
-4. Default values (lowest priority)
+2. Configuration file settings (.aicommit or .env files)
+3. Environment variables (lowest priority)
+
+The tool will search for configuration in this order:
+1. Environment variables (always checked first as fallback)
+2. Command-line specified config file (`-c` option)
+3. `.aicommit` in current or parent directories
+4. `.env` in current or parent directories
 
 Required config keys: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`
 Optional config keys: `LOG_PATH`, `AUTO_COMMIT`, `AUTO_PUSH`

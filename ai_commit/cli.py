@@ -154,47 +154,84 @@ def validate_config(config: Dict[str, Any]) -> bool:
 
 
 def load_config(logger: logging.Logger, config_path: Optional[str] = None) -> Dict[str, Any]:
-    """Load configuration from .aicommit or .env file"""
+    """Load configuration from .aicommit/.env files or environment variables"""
     config_type, config_file = find_config_files(config_path)
     
-    if config_type is None:
-        log_with_details(logger, logging.ERROR,
-            "Configuration file not found",
-            "Neither .aicommit nor .env file found in current or parent directories"
-        )
-        sys.exit(1)
-    
-    log_with_details(logger, logging.INFO,
-        f"Found configuration file: {config_type}",
-        f"Using config file: {config_file}"
-    )
-    
     config = {}
-    try:
-        if config_type == 'aicommit':
-            config = load_aicommit_config(config_file)
-        else:  # env file
-            load_dotenv(config_file)
-            # Load configuration from environment variables
-            for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH']:
-                if value := os.getenv(key):
-                    config[key] = value
-        
-        # Convert AUTO_COMMIT and AUTO_PUSH strings to boolean
-        for key in ['AUTO_COMMIT', 'AUTO_PUSH']:
-            if key in config:
-                config[key] = config[key].lower() == 'true'
-        
-        log_with_details(logger, logging.DEBUG,
-            "Configuration loaded successfully",
-            f"Loaded keys: {', '.join(config.keys())}"
+    
+    # First, always try to load from environment variables (lowest priority)
+    env_config = {}
+    for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH']:
+        if value := os.getenv(key):
+            env_config[key] = value
+    
+    if env_config:
+        config.update(env_config)
+        log_with_details(logger, logging.INFO,
+            "Loaded configuration from environment variables",
+            f"Found env vars: {', '.join(env_config.keys())}"
         )
-    except Exception as e:
+    
+    # Then load from config file if available (higher priority)
+    if config_type is not None:
+        log_with_details(logger, logging.INFO,
+            f"Found configuration file: {config_type}",
+            f"Using config file: {config_file}"
+        )
+        
+        try:
+            file_config = {}
+            if config_type == 'aicommit':
+                file_config = load_aicommit_config(config_file)
+            else:  # env file
+                load_dotenv(config_file)
+                # Re-read environment variables after loading .env file
+                for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH']:
+                    if value := os.getenv(key):
+                        file_config[key] = value
+            
+            # File config overrides environment variables
+            config.update(file_config)
+            
+            log_with_details(logger, logging.DEBUG,
+                "Configuration loaded from file",
+                f"File config keys: {', '.join(file_config.keys())}"
+            )
+        except Exception as e:
+            log_with_details(logger, logging.ERROR,
+                "Failed to load configuration file",
+                f"Error: {str(e)}"
+            )
+            sys.exit(1)
+    
+    # If no configuration found at all, show helpful error
+    if not config:
         log_with_details(logger, logging.ERROR,
-            "Failed to load configuration",
-            f"Error: {str(e)}"
+            "No configuration found",
+            "Set environment variables or create .aicommit/.env file in current or parent directories"
         )
+        print("\n" + "="*60)
+        print("❌ Configuration Required")
+        print("="*60)
+        print("No configuration found. You can configure ai-commit in two ways:")
+        print("\n1. Environment Variables:")
+        print("   export OPENAI_API_KEY='your-api-key'")
+        print("   export OPENAI_BASE_URL='your-api-base-url'")
+        print("   export OPENAI_MODEL='gpt-3.5-turbo'")
+        print("\n2. Configuration File:")
+        print("   Create .aicommit or .env file with your settings")
+        print("="*60)
         sys.exit(1)
+    
+    # Convert AUTO_COMMIT and AUTO_PUSH strings to boolean
+    for key in ['AUTO_COMMIT', 'AUTO_PUSH']:
+        if key in config:
+            config[key] = config[key].lower() == 'true'
+    
+    log_with_details(logger, logging.DEBUG,
+        "Final configuration loaded",
+        f"All config keys: {', '.join(config.keys())}"
+    )
     
     # Validate configuration
     if not validate_config(config):

@@ -79,15 +79,32 @@ ai-commit [-h] [-y] [-c CONFIG] [-m MODEL] [--dry-run] [-v] [-i] [-a]
 
 ## 配置
 
-你可以在项目根目录或任何父目录中使用 `.aicommit` 文件或 `.env` 文件来配置工具。
+你可以通过多种方式配置工具（按优先级排序）：
 
-### 配置文件
+### 1. 环境变量（始终可用）
+
+在你的 shell 中设置这些环境变量：
+
+```bash
+export OPENAI_API_KEY='your-api-key'
+export OPENAI_BASE_URL='your-api-base-url'  
+export OPENAI_MODEL='gpt-3.5-turbo'
+export LOG_PATH='.commitLogs'              # 可选
+export AUTO_COMMIT='false'                 # 可选
+export AUTO_PUSH='false'                   # 可选
+```
+
+### 2. 配置文件
+
+在项目根目录或任何父目录中创建 `.aicommit` 或 `.env` 文件。
+
+#### 创建配置文件
 
 1. 创建 `.aicommit` 或 `.env` 文件：
    - 复制 `.aicommit_template` 为 `.aicommit`
    - 编辑文件填入你的设置
 
-### 配置选项
+#### 配置选项
 
 ```ini
 OPENAI_API_KEY=your_api_key          # 必需：你的 OpenAI API 密钥
@@ -98,16 +115,18 @@ AUTO_COMMIT=true                     # 可选：跳过确认（默认：false）
 AUTO_PUSH=true                       # 可选：提交后自动推送（默认：false）
 ```
 
-工具将按以下顺序搜索配置文件：
-1. 命令行指定的配置文件（`-c` 选项）
-2. 当前或父目录中的 `.aicommit`
-3. 当前或父目录中的 `.env`
+工具将按以下顺序搜索配置：
+1. 环境变量（始终作为后备检查）
+2. 命令行指定的配置文件（`-c` 选项）
+3. 当前或父目录中的 `.aicommit`
+4. 当前或父目录中的 `.env`
 
 ### 配置优先级
 
+配置值按以下顺序应用（从高到低优先级）：
 1. 命令行参数（最高优先级）
-2. 配置文件设置
-3. 默认值（最低优先级）
+2. 配置文件设置（.aicommit 或 .env）
+3. 环境变量（最低优先级）
 
 ## 功能详细说明
 

@@ -12,7 +12,9 @@ from ai_commit.cli import (
     validate_git_staged_changes,
     parse_args,
     get_changed_files,
-    stage_selected_files
+    stage_selected_files,
+    load_config,
+    validate_config
 )
 
 
@@ -118,6 +120,56 @@ class TestAICommit(unittest.TestCase):
         # Test with empty list
         result = stage_selected_files([], mock_logger)
         self.assertTrue(result)
+
+    def test_validate_config(self):
+        """Test configuration validation"""
+        # Test valid configuration
+        valid_config = {
+            'OPENAI_API_KEY': 'sk-test-key',
+            'OPENAI_BASE_URL': 'https://api.openai.com/v1',
+            'OPENAI_MODEL': 'gpt-3.5-turbo'
+        }
+        result = validate_config(valid_config)
+        self.assertTrue(result)
+        
+        # Test invalid API key format
+        invalid_config = {
+            'OPENAI_API_KEY': 'invalid-key',
+            'OPENAI_BASE_URL': 'https://api.openai.com/v1',
+            'OPENAI_MODEL': 'gpt-3.5-turbo'
+        }
+        result = validate_config(invalid_config)
+        self.assertFalse(result)
+        
+        # Test missing required key
+        incomplete_config = {
+            'OPENAI_API_KEY': 'sk-test-key',
+            'OPENAI_BASE_URL': 'https://api.openai.com/v1'
+            # Missing OPENAI_MODEL
+        }
+        result = validate_config(incomplete_config)
+        self.assertFalse(result)
+
+    @patch.dict(os.environ, {
+        'OPENAI_API_KEY': 'sk-env-test-key',
+        'OPENAI_BASE_URL': 'https://api.openai.com/v1',
+        'OPENAI_MODEL': 'gpt-4',
+        'LOG_PATH': '.logs',
+        'AUTO_COMMIT': 'true'
+    })
+    @patch('ai_commit.cli.find_config_files')
+    def test_load_config_from_env_vars(self, mock_find_config):
+        """Test loading configuration from environment variables"""
+        mock_logger = MagicMock()
+        mock_find_config.return_value = (None, None)  # No config file found
+        
+        config = load_config(mock_logger)
+        
+        self.assertEqual(config['OPENAI_API_KEY'], 'sk-env-test-key')
+        self.assertEqual(config['OPENAI_BASE_URL'], 'https://api.openai.com/v1')
+        self.assertEqual(config['OPENAI_MODEL'], 'gpt-4')
+        self.assertEqual(config['LOG_PATH'], '.logs')
+        self.assertTrue(config['AUTO_COMMIT'])  # Should be converted to boolean
 
 
 if __name__ == '__main__':

@@ -76,15 +76,32 @@ options:
 
 ## Configuration
 
-You can configure the tool using either a `.aicommit` file or a `.env` file in your project root or any parent directory.
+You can configure the tool in multiple ways (in order of priority):
 
-### Configuration Files
+### 1. Environment Variables (Always available)
+
+Set these environment variables in your shell:
+
+```bash
+export OPENAI_API_KEY='your-api-key'
+export OPENAI_BASE_URL='your-api-base-url'  
+export OPENAI_MODEL='gpt-3.5-turbo'
+export LOG_PATH='.commitLogs'              # Optional
+export AUTO_COMMIT='false'                 # Optional
+export AUTO_PUSH='false'                   # Optional
+```
+
+### 2. Configuration Files
+
+Create a `.aicommit` or `.env` file in your project root or any parent directory.
+
+#### Creating Configuration Files
 
 1. Create a `.aicommit` or `.env` file:
    - Copy `.aicommit_template` to `.aicommit`
    - Edit the file with your settings
 
-### Configuration Options
+#### Configuration Options
 
 ```ini
 OPENAI_API_KEY=your_api_key          # Required: Your OpenAI API key
@@ -96,15 +113,17 @@ AUTO_PUSH=true                       # Optional: Auto push after commit (default
 ```
 
 The tool will search for configuration files in the following order:
-1. Command-line specified config file (`-c` option)
-2. `.aicommit` in current or parent directories
-3. `.env` in current or parent directories
+1. Environment variables (always checked as fallback)
+2. Command-line specified config file (`-c` option)
+3. `.aicommit` in current or parent directories
+4. `.env` in current or parent directories
 
 ### Configuration Priority
 
+Configuration values are applied in this order (highest to lowest priority):
 1. Command-line arguments (highest priority)
-2. Configuration file settings
-3. Default values (lowest priority)
+2. Configuration file settings (.aicommit or .env)
+3. Environment variables (lowest priority)
 
 ## Features in Detail
 
