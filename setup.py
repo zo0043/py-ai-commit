@@ -5,6 +5,7 @@ setup(
     version="0.2.0",
     packages=find_packages(),
     install_requires=[
+        "setuptools>=58.0.0",
         "openai>=1.0.0",
         "python-dotenv>=0.19.0",
     ],
