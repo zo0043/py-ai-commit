@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest tests/ -v)"
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m build:*)",
+      "Bash(rm:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }

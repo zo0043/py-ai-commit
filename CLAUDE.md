@@ -16,6 +16,15 @@ pip install -e .
 # Install dependencies
 pip install -r requirements.txt
 
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Build package (modern way)
+python -m build
+
+# Install from local build
+pip install dist/ai_commit-0.2.0-py3-none-any.whl
+
 # Configure the tool (copy and edit the template)
 cp .aicommit_template .aicommit
 ```
@@ -69,7 +78,9 @@ cat .commitLogs/commit_$(date +%Y%m%d).log
 
 - **`ai_commit/cli.py`** - Main CLI module containing all functionality
 - **`ai_commit/__init__.py`** - Package initialization (version 0.2.0)
-- **`setup.py`** - Package configuration and entry point definition
+- **`pyproject.toml`** - Modern Python package configuration (replaces setup.py)
+- **`requirements.txt`** - Runtime dependencies
+- **`requirements-dev.txt`** - Development dependencies
 
 ### Key Functions in cli.py
 
