@@ -28,10 +28,36 @@ Basic usage in any git repository:
 ai-commit
 ```
 
+### Enhanced File Selection
+
+**Interactive Mode** - Choose specific files to stage and commit:
+```bash
+ai-commit -i
+```
+This will show you all unstaged files and let you select which ones to analyze and commit.
+
+**Auto-stage Mode** - Automatically stage all changed files:
+```bash
+ai-commit -a
+```
+This will automatically stage all unstaged files and then generate a commit message.
+
+**Combined Usage Examples**:
+```bash
+# Interactive selection with auto-commit and verbose output
+ai-commit -i -y -v
+
+# Auto-stage all files and commit with confirmation
+ai-commit -a
+
+# Interactive selection with dry-run (no actual commit)
+ai-commit -i --dry-run
+```
+
 Command line options:
 
 ```bash
-ai-commit [-h] [-y] [-c CONFIG] [-m MODEL] [--dry-run] [-v]
+ai-commit [-h] [-y] [-c CONFIG] [-m MODEL] [--dry-run] [-v] [-i] [-a]
 
 options:
   -h, --help            Show this help message
@@ -42,6 +68,8 @@ options:
                       Override AI model from config
   --dry-run           Generate message without committing
   -v, --verbose       Show verbose output
+  -i, --interactive   Interactively select files to analyze and commit
+  -a, --all          Analyze and stage all changed files automatically
 ```
 
 ## Configuration

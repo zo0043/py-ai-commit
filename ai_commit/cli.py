@@ -10,7 +10,7 @@ import argparse
 import time
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any, List
 
 class CustomFormatter(logging.Formatter):
     """Custom log formatter with color support"""
@@ -50,6 +50,10 @@ def parse_args() -> argparse.Namespace:
                       help='Generate message without committing')
     parser.add_argument('-v', '--verbose', action='store_true',
                       help='Show verbose output')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                      help='Interactively select files to analyze and commit')
+    parser.add_argument('-a', '--all', action='store_true',
+                      help='Analyze and stage all changed files automatically')
     return parser.parse_args()
 
 def setup_logging(log_path: str) -> logging.Logger:
@@ -201,6 +205,143 @@ def load_config(logger: logging.Logger, config_path: Optional[str] = None) -> Di
         sys.exit(1)
         
     return config
+
+def get_changed_files(logger: logging.Logger) -> Tuple[List[str], List[str]]:
+    """Get lists of staged and unstaged files"""
+    try:
+        # Get staged files
+        staged_result = subprocess.run(['git', 'diff', '--cached', '--name-only'], 
+                                     capture_output=True, text=True, check=True)
+        staged_files = [f.strip() for f in staged_result.stdout.splitlines() if f.strip()]
+        
+        # Get unstaged files (modified and untracked)
+        unstaged_result = subprocess.run(['git', 'diff', '--name-only'], 
+                                       capture_output=True, text=True, check=True)
+        unstaged_files = [f.strip() for f in unstaged_result.stdout.splitlines() if f.strip()]
+        
+        # Get untracked files
+        untracked_result = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'], 
+                                        capture_output=True, text=True, check=True)
+        untracked_files = [f.strip() for f in untracked_result.stdout.splitlines() if f.strip()]
+        
+        # Combine unstaged and untracked
+        all_unstaged = list(set(unstaged_files + untracked_files))
+        
+        log_with_details(logger, logging.INFO,
+            "Retrieved file changes",
+            f"Staged: {len(staged_files)}, Unstaged: {len(all_unstaged)}"
+        )
+        
+        return staged_files, all_unstaged
+        
+    except subprocess.CalledProcessError as e:
+        log_with_details(logger, logging.ERROR,
+            "Failed to get changed files",
+            f"Error: {str(e)}"
+        )
+        return [], []
+
+
+def display_file_changes(staged_files: List[str], unstaged_files: List[str]) -> None:
+    """Display current file changes in a formatted way"""
+    print("\n" + "="*60)
+    print("📁 Current Git Status")
+    print("="*60)
+    
+    if staged_files:
+        print(f"\n✅ Staged files ({len(staged_files)}):")
+        for i, file in enumerate(staged_files, 1):
+            print(f"  {i:2d}. {file}")
+    else:
+        print("\n✅ No staged files")
+    
+    if unstaged_files:
+        print(f"\n📝 Unstaged files ({len(unstaged_files)}):")
+        for i, file in enumerate(unstaged_files, 1):
+            print(f"  {i:2d}. {file}")
+    else:
+        print("\n📝 No unstaged files")
+    
+    print("\n" + "="*60)
+
+
+def select_files_interactive(staged_files: List[str], unstaged_files: List[str], logger: logging.Logger) -> List[str]:
+    """Interactive file selection for staging and analysis"""
+    selected_files = []
+    
+    if not unstaged_files:
+        print("No unstaged files to select from.")
+        return staged_files
+    
+    print("\n🎯 Select files to stage and analyze:")
+    print("   Enter file numbers separated by spaces (e.g., 1 3 5)")
+    print("   Enter 'all' to select all files")
+    print("   Enter 'none' to skip file selection")
+    print("   Press Enter to finish selection")
+    
+    while True:
+        try:
+            response = input("\nSelect files: ").strip().lower()
+            
+            if response == 'all':
+                selected_files = unstaged_files.copy()
+                break
+            elif response == 'none' or response == '':
+                break
+            else:
+                # Parse numbers
+                numbers = []
+                for part in response.split():
+                    try:
+                        num = int(part)
+                        if 1 <= num <= len(unstaged_files):
+                            numbers.append(num)
+                        else:
+                            print(f"Invalid number: {num}. Please use numbers 1-{len(unstaged_files)}")
+                    except ValueError:
+                        print(f"Invalid input: {part}. Please enter numbers only.")
+                
+                if numbers:
+                    selected_files = [unstaged_files[i-1] for i in numbers]
+                    break
+                    
+        except KeyboardInterrupt:
+            print("\nSelection cancelled.")
+            return []
+    
+    if selected_files:
+        print(f"\n✅ Selected {len(selected_files)} files:")
+        for file in selected_files:
+            print(f"   - {file}")
+    
+    return selected_files
+
+
+def stage_selected_files(files: List[str], logger: logging.Logger) -> bool:
+    """Stage the selected files"""
+    if not files:
+        return True
+    
+    try:
+        for file in files:
+            result = subprocess.run(['git', 'add', file], 
+                                  capture_output=True, text=True, check=True)
+            
+        log_with_details(logger, logging.INFO,
+            "Files staged successfully",
+            f"Staged files: {', '.join(files)}"
+        )
+        print(f"✅ Staged {len(files)} files successfully")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        log_with_details(logger, logging.ERROR,
+            "Failed to stage files",
+            f"Error: {str(e)}"
+        )
+        print(f"❌ Failed to stage files: {str(e)}")
+        return False
+
 
 def get_git_diff(logger: logging.Logger) -> Optional[str]:
     """Get the git diff of staged and unstaged changes"""
@@ -471,9 +612,42 @@ def main() -> None:
                 f"New log path: {log_path}"
             )
         
+        # Handle file selection based on arguments
+        if args.interactive or args.all:
+            # Get current file changes
+            staged_files, unstaged_files = get_changed_files(logger)
+            
+            # Display current status
+            display_file_changes(staged_files, unstaged_files)
+            
+            if args.all:
+                # Auto-stage all unstaged files
+                if unstaged_files:
+                    print(f"\n🔄 Auto-staging all {len(unstaged_files)} unstaged files...")
+                    if not stage_selected_files(unstaged_files, logger):
+                        return
+                else:
+                    print("\n✅ No unstaged files to stage")
+            
+            elif args.interactive:
+                # Interactive file selection
+                if unstaged_files:
+                    selected_files = select_files_interactive(staged_files, unstaged_files, logger)
+                    if selected_files:
+                        if not stage_selected_files(selected_files, logger):
+                            return
+                    elif not staged_files:
+                        print("No files selected and no staged files available for commit.")
+                        return
+                else:
+                    print("\n✅ No unstaged files available for selection")
+        
         # Validate git repository and changes
         if not validate_git_staged_changes(logger):
-            print("No staged changes found. Please use 'git add' to stage your changes first.")
+            if args.interactive or args.all:
+                print("No staged changes found after file selection. Please select files to stage first.")
+            else:
+                print("No staged changes found. Please use 'git add' to stage your changes first.")
             return
         
         # Get git diff

@@ -25,6 +25,12 @@ cp .aicommit_template .aicommit
 # Basic usage (requires staged changes)
 ai-commit
 
+# Interactive file selection mode
+ai-commit -i
+
+# Auto-stage all changed files
+ai-commit -a
+
 # Dry run mode to test without committing
 ai-commit --dry-run
 
@@ -36,6 +42,9 @@ ai-commit -v
 
 # Override model
 ai-commit -m gpt-4
+
+# Combine options (interactive + auto-commit + verbose)
+ai-commit -i -y -v
 ```
 
 ### Development & Debugging
@@ -64,9 +73,13 @@ cat .commitLogs/commit_$(date +%Y%m%d).log
 
 ### Key Functions in cli.py
 
-- `parse_args()` - Command line argument parsing with type hints
+- `parse_args()` - Command line argument parsing with type hints (now includes -i/--interactive and -a/--all)
 - `validate_config()` - Configuration validation with API key format checking
 - `load_config()` - Configuration loading from .aicommit or .env files
+- `get_changed_files()` - Discover staged and unstaged files with comprehensive file status
+- `display_file_changes()` - Pretty-print current git status with file categorization
+- `select_files_interactive()` - Interactive file selection with numbered options
+- `stage_selected_files()` - Batch staging of user-selected files
 - `get_git_diff()` - Git diff extraction for both staged and unstaged changes
 - `generate_commit_message()` - OpenAI API integration with retry logic and error handling
 - `commit_changes()` - Git commit execution
@@ -107,6 +120,10 @@ Optional config keys: `LOG_PATH`, `AUTO_COMMIT`, `AUTO_PUSH`
 - Test coverage for argument parsing, message extraction, and validation functions
 
 ### Key Features
+- **Interactive File Selection** - Choose specific files to analyze and commit with -i flag
+- **Auto-staging Mode** - Automatically stage all changed files with -a flag  
+- **Smart File Discovery** - Detects staged, unstaged, and untracked files automatically
+- **Visual Status Display** - Pretty-formatted git status with file categorization
 - Branch context awareness (includes current branch in commit message generation)
 - Conventional commit format enforcement
 - Auto-commit and auto-push capabilities
