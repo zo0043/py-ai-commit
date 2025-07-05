@@ -10,9 +10,10 @@ import argparse
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+from typing import Dict, Optional, Tuple, Any
 
 class CustomFormatter(logging.Formatter):
-    """自定义日志格式化器，添加颜色支持"""
+    """Custom log formatter with color support"""
     grey = "\x1b[38;21m"
     blue = "\x1b[38;5;39m"
     yellow = "\x1b[38;5;226m"
@@ -36,7 +37,7 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='AI-powered git commit message generator')
     parser.add_argument('-y', '--yes', action='store_true',
@@ -51,7 +52,7 @@ def parse_args():
                       help='Show verbose output')
     return parser.parse_args()
 
-def setup_logging(log_path):
+def setup_logging(log_path: str) -> logging.Logger:
     """Setup logging configuration with enhanced formatting"""
     if not os.path.exists(log_path):
         os.makedirs(log_path, exist_ok=True)
@@ -62,18 +63,18 @@ def setup_logging(log_path):
     logger = logging.getLogger('ai_commit')
     logger.setLevel(logging.INFO)
     
-    # 清除现有的handlers
+    # Clear existing handlers
     if logger.handlers:
         logger.handlers.clear()
     
-    # 文件处理器 - 记录所有级别的日志
+    # File handler - logs all levels
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(
         '%(asctime)s [%(levelname)s] %(message)s\nDetails: %(details)s\n'
     ))
     
-    # 控制台处理器 - 只显示INFO及以上级别
+    # Console handler - only shows INFO and above
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(CustomFormatter(
@@ -85,12 +86,12 @@ def setup_logging(log_path):
     
     return logger
 
-def log_with_details(logger, level, message, details=None):
+def log_with_details(logger: logging.Logger, level: int, message: str, details: Optional[str] = None) -> None:
     """Helper function to log messages with details"""
     extra = {'details': details if details else 'No additional details'}
     logger.log(level, message, extra=extra)
 
-def find_config_files(config_path=None):
+def find_config_files(config_path: Optional[str] = None) -> Tuple[Optional[str], Optional[Path]]:
     """Find .aicommit or .env file in current or parent directories"""
     if config_path:
         config_file = Path(config_path)
@@ -110,14 +111,13 @@ def find_config_files(config_path=None):
         elif env_file.exists():
             return ('env', env_file)
         elif template_file.exists():
-            # 如果找到模板文件，提示用户进行配置
             print("Found .aicommit_template file. Please configure it and rename to .aicommit")
             sys.exit(1)
             
         current = current.parent
     return (None, None)
 
-def load_aicommit_config(config_file):
+def load_aicommit_config(config_file: Path) -> Dict[str, str]:
     """Load configuration from .aicommit file"""
     config = {}
     with open(config_file, 'r') as f:
@@ -127,7 +127,29 @@ def load_aicommit_config(config_file):
                 config[key] = value
     return config
 
-def load_config(logger, config_path=None):
+def validate_config(config: Dict[str, Any]) -> bool:
+    """Validate configuration values"""
+    # Check for required keys
+    required_keys = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL']
+    for key in required_keys:
+        if key not in config or not config[key]:
+            return False
+    
+    # Validate API key format (basic check)
+    api_key = config['OPENAI_API_KEY']
+    if not api_key.startswith(('sk-', 'sk-proj-')):
+        return False
+    
+    # Validate model name
+    model = config['OPENAI_MODEL']
+    valid_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini']
+    if model not in valid_models:
+        print(f"Warning: Using potentially unsupported model '{model}'. Supported models: {', '.join(valid_models)}")
+    
+    return True
+
+
+def load_config(logger: logging.Logger, config_path: Optional[str] = None) -> Dict[str, Any]:
     """Load configuration from .aicommit or .env file"""
     config_type, config_file = find_config_files(config_path)
     
@@ -147,9 +169,9 @@ def load_config(logger, config_path=None):
     try:
         if config_type == 'aicommit':
             config = load_aicommit_config(config_file)
-        else:  # env
+        else:  # env file
             load_dotenv(config_file)
-            # 从环境变量中获取配置
+            # Load configuration from environment variables
             for key in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH']:
                 if value := os.getenv(key):
                     config[key] = value
@@ -170,19 +192,17 @@ def load_config(logger, config_path=None):
         )
         sys.exit(1)
     
-    # Validate required configuration
-    required_keys = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL']
-    missing_keys = [key for key in required_keys if key not in config]
-    if missing_keys:
+    # Validate configuration
+    if not validate_config(config):
         log_with_details(logger, logging.ERROR,
-            "Missing required configuration",
-            f"Missing keys: {', '.join(missing_keys)}"
+            "Invalid configuration",
+            "Please check your API key format and required settings"
         )
         sys.exit(1)
         
     return config
 
-def get_git_diff(logger):
+def get_git_diff(logger: logging.Logger) -> Optional[str]:
     """Get the git diff of staged and unstaged changes"""
     try:
         # Check if we're in a git repository
@@ -231,7 +251,7 @@ def get_git_diff(logger):
         )
         return None
 
-def validate_git_staged_changes(logger):
+def validate_git_staged_changes(logger: logging.Logger) -> bool:
     """Validate that there are staged changes for commit"""
     try:
         staged = subprocess.run(['git', 'diff', '--cached', '--quiet'],
@@ -246,16 +266,16 @@ def validate_git_staged_changes(logger):
     except subprocess.CalledProcessError:
         return False
 
-def get_branch_name():
+def get_branch_name() -> Optional[str]:
     """Get current git branch name"""
     try:
         result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, check=True)
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, Exception):
         return None
 
-def extract_commit_message(text):
+def extract_commit_message(text: str) -> str:
     """Extract commit message from between ``` marks"""
     pattern = r'```(?:\w*\n)?(.*?)```'
     matches = re.findall(pattern, text, re.DOTALL)
@@ -263,7 +283,7 @@ def extract_commit_message(text):
         return matches[0].strip()
     return text.strip()
 
-def generate_commit_message(diff_text, config, logger):
+def generate_commit_message(diff_text: str, config: Dict[str, Any], logger: logging.Logger) -> Optional[str]:
     """Generate commit message using OpenAI API"""
     client = openai.OpenAI(
         api_key=config['OPENAI_API_KEY'],
@@ -303,9 +323,31 @@ type(scope): description"""
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant that generates clear and concise git commit messages. Wrap your commit message in ```"},
                         {"role": "user", "content": prompt}
-                    ]
+                    ],
+                    max_tokens=150,
+                    temperature=0.7
                 )
                 break
+            except openai.RateLimitError as e:
+                retry_count += 1
+                if retry_count == max_retries:
+                    log_with_details(logger, logging.ERROR,
+                        "Rate limit exceeded",
+                        "OpenAI API rate limit reached. Please try again later."
+                    )
+                    raise e
+                wait_time = 2 ** retry_count  # Exponential backoff
+                log_with_details(logger, logging.WARNING,
+                    f"Rate limit hit (attempt {retry_count}/{max_retries})",
+                    f"Waiting {wait_time} seconds before retry..."
+                )
+                time.sleep(wait_time)
+            except openai.AuthenticationError as e:
+                log_with_details(logger, logging.ERROR,
+                    "Authentication failed",
+                    "Invalid OpenAI API key. Please check your configuration."
+                )
+                raise e
             except Exception as e:
                 retry_count += 1
                 if retry_count == max_retries:
@@ -314,7 +356,7 @@ type(scope): description"""
                     f"API call failed (attempt {retry_count}/{max_retries})",
                     f"Error: {str(e)}\nRetrying..."
                 )
-                time.sleep(1)  # 添加延迟避免频繁请求
+                time.sleep(1)  # Add delay to avoid frequent requests
         
         raw_message = response.choices[0].message.content.strip()
         commit_message = extract_commit_message(raw_message)
@@ -333,7 +375,7 @@ type(scope): description"""
         )
         return None
 
-def commit_changes(commit_message, logger):
+def commit_changes(commit_message: str, logger: logging.Logger) -> bool:
     """Commit changes with the generated message"""
     try:
         result = subprocess.run(['git', 'commit', '-m', commit_message],
@@ -357,10 +399,10 @@ def commit_changes(commit_message, logger):
         )
         return False
 
-def push_changes(logger):
+def push_changes(logger: logging.Logger) -> bool:
     """Push committed changes to remote repository"""
     try:
-        # 获取当前分支名
+        # Get current branch name
         branch_name = get_branch_name()
         if not branch_name:
             log_with_details(logger, logging.ERROR,
@@ -369,7 +411,7 @@ def push_changes(logger):
             )
             return False
 
-        # 执行 git push
+        # Execute git push
         result = subprocess.run(['git', 'push', 'origin', branch_name],
                              capture_output=True, text=True)
         if result.returncode == 0:
@@ -391,7 +433,7 @@ def push_changes(logger):
         )
         return False
 
-def main():
+def main() -> None:
     try:
         args = parse_args()
         
@@ -469,7 +511,7 @@ def main():
                 f"Source: {'command line' if args.yes else 'config file'}"
             )
             if commit_changes(commit_message, logger):
-                # 如果提交成功且启用了自动推送，则执行推送
+                # If commit succeeds and auto-push is enabled, push changes
                 if config.get('AUTO_PUSH', False):
                     log_with_details(logger, logging.INFO,
                         "Auto push enabled",
@@ -481,7 +523,7 @@ def main():
             response = input("\nWould you like to commit with this message? (y/N): ")
             if response.lower() == 'y':
                 if commit_changes(commit_message, logger):
-                    # 如果提交成功且启用了自动推送，则执行推送
+                    # If commit succeeds and auto-push is enabled, push changes
                     if config.get('AUTO_PUSH', False):
                         log_with_details(logger, logging.INFO,
                             "Auto push enabled",
