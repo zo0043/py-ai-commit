@@ -81,6 +81,8 @@ cat .commitLogs/commit_$(date +%Y%m%d).log
 - **`pyproject.toml`** - Modern Python package configuration (replaces setup.py)
 - **`requirements.txt`** - Runtime dependencies
 - **`requirements-dev.txt`** - Development dependencies
+- **`README.md`** - English documentation
+- **`README_CN.md`** - Chinese documentation
 
 ### Key Functions in cli.py
 

@@ -2,6 +2,8 @@
 
 AI-powered git commit message generator using OpenAI API.
 
+**English** | [简体中文](README_CN.md)
+
 ## Features
 
 - Automatically generates clear and descriptive commit messages
@@ -13,7 +15,7 @@ AI-powered git commit message generator using OpenAI API.
 - Auto-commit support
 - Auto-push support
 - Branch context awareness
-
+ff
 ## Installation
 
 ```bash
