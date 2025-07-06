@@ -2,41 +2,30 @@ import unittest
 import sys
 import os
 from unittest.mock import patch, MagicMock
+import tempfile
 
 # Add the parent directory to the path to import ai_commit
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from ai_commit.cli import (
-    extract_commit_message,
-    get_branch_name,
-    validate_git_staged_changes,
-    parse_args,
-    get_changed_files,
-    stage_selected_files,
-    load_config,
-    validate_config
-)
+# Import from the new modular architecture
+from ai_commit.cli import parse_args, AICommitWorkflow
+from ai_commit.config import AICommitConfig
+from ai_commit.git import GitOperations
+from ai_commit.ai import AIClient
+from ai_commit.utils import FileSelector
+from ai_commit.exceptions import GitOperationError, ValidationError
 
 
 class TestAICommit(unittest.TestCase):
     """Test cases for AI Commit functionality"""
 
-    def test_extract_commit_message(self):
-        """Test commit message extraction from markdown"""
-        # Test with code block
-        text_with_code = "```\nfeat(auth): add user authentication\n```"
-        result = extract_commit_message(text_with_code)
-        self.assertEqual(result, "feat(auth): add user authentication")
-        
-        # Test with language specified
-        text_with_lang = "```bash\nfix(api): resolve connection timeout\n```"
-        result = extract_commit_message(text_with_lang)
-        self.assertEqual(result, "fix(api): resolve connection timeout")
-        
-        # Test without code block
-        text_plain = "docs(readme): update installation instructions"
-        result = extract_commit_message(text_plain)
-        self.assertEqual(result, "docs(readme): update installation instructions")
+    def setUp(self):
+        """Set up test fixtures."""
+        self.test_config = AICommitConfig(
+            openai_api_key="sk-test-key-1234567890abcdef",
+            openai_base_url="https://api.openai.com/v1",
+            openai_model="gpt-3.5-turbo"
+        )
 
     def test_parse_args(self):
         """Test argument parsing"""
@@ -61,39 +50,41 @@ class TestAICommit(unittest.TestCase):
             args = parse_args()
             self.assertTrue(args.all)
 
-    @patch('subprocess.run')
-    def test_get_branch_name(self, mock_run):
-        """Test branch name extraction"""
+    @patch('ai_commit.git.subprocess.run')
+    def test_git_operations_get_branch_name(self, mock_run):
+        """Test branch name extraction with GitOperations"""
+        git_ops = GitOperations()
+        
         # Test successful branch name retrieval
         mock_run.return_value = MagicMock(stdout="main\n", returncode=0)
-        result = get_branch_name()
+        result = git_ops.get_current_branch()
         self.assertEqual(result, "main")
         
-        # Test error handling
-        mock_run.side_effect = Exception("Git error")
-        result = get_branch_name()
+        # Test error handling - should return None on subprocess error
+        import subprocess
+        mock_run.side_effect = subprocess.CalledProcessError(1, 'git')
+        result = git_ops.get_current_branch()
         self.assertIsNone(result)
 
-    @patch('subprocess.run')
-    def test_validate_git_staged_changes(self, mock_run):
-        """Test staged changes validation"""
-        # Create a mock logger
-        mock_logger = MagicMock()
+    @patch('ai_commit.git.subprocess.run')
+    def test_git_operations_validate_staged_changes(self, mock_run):
+        """Test staged changes validation with GitOperations"""
+        git_ops = GitOperations()
         
         # Test with staged changes
         mock_run.return_value = MagicMock(returncode=1)  # Non-zero means changes exist
-        result = validate_git_staged_changes(mock_logger)
+        result = git_ops.validate_staged_changes()
         self.assertTrue(result)
         
         # Test without staged changes
         mock_run.return_value = MagicMock(returncode=0)  # Zero means no changes
-        result = validate_git_staged_changes(mock_logger)
+        result = git_ops.validate_staged_changes()
         self.assertFalse(result)
 
-    @patch('subprocess.run')
-    def test_get_changed_files(self, mock_run):
-        """Test getting changed files"""
-        mock_logger = MagicMock()
+    @patch('ai_commit.git.subprocess.run')
+    def test_git_operations_get_changed_files(self, mock_run):
+        """Test getting changed files with GitOperations"""
+        git_ops = GitOperations()
         
         # Mock the three subprocess calls
         mock_run.side_effect = [
@@ -102,74 +93,104 @@ class TestAICommit(unittest.TestCase):
             MagicMock(stdout="file4.py\n", returncode=0)            # untracked files
         ]
         
-        staged, unstaged = get_changed_files(mock_logger)
+        staged, unstaged = git_ops.get_changed_files()
         
         self.assertEqual(staged, ['file1.py', 'file2.py'])
         self.assertEqual(set(unstaged), {'file3.py', 'file4.py'})
 
-    @patch('subprocess.run')
-    def test_stage_selected_files(self, mock_run):
-        """Test staging selected files"""
-        mock_logger = MagicMock()
+    @patch('ai_commit.git.subprocess.run')
+    def test_git_operations_stage_files(self, mock_run):
+        """Test staging files with GitOperations"""
+        git_ops = GitOperations()
         
         # Test successful staging
         mock_run.return_value = MagicMock(returncode=0)
-        result = stage_selected_files(['file1.py', 'file2.py'], mock_logger)
-        self.assertTrue(result)
+        
+        # Mock Path.exists to return True
+        with patch('pathlib.Path.exists', return_value=True):
+            result = git_ops.stage_files(['file1.py', 'file2.py'])
+            self.assertTrue(result)
         
         # Test with empty list
-        result = stage_selected_files([], mock_logger)
+        result = git_ops.stage_files([])
         self.assertTrue(result)
 
-    def test_validate_config(self):
+    def test_config_validation(self):
         """Test configuration validation"""
         # Test valid configuration
-        valid_config = {
-            'OPENAI_API_KEY': 'sk-test-key',
-            'OPENAI_BASE_URL': 'https://api.openai.com/v1',
-            'OPENAI_MODEL': 'gpt-3.5-turbo'
-        }
-        result = validate_config(valid_config)
-        self.assertTrue(result)
+        valid_config = AICommitConfig(
+            openai_api_key="sk-test-key-1234567890abcdef",
+            openai_base_url="https://api.openai.com/v1",
+            openai_model="gpt-3.5-turbo"
+        )
+        # Should not raise an exception
+        valid_config.validate()
         
-        # Test invalid API key format
-        invalid_config = {
-            'OPENAI_API_KEY': 'invalid-key',
-            'OPENAI_BASE_URL': 'https://api.openai.com/v1',
-            'OPENAI_MODEL': 'gpt-3.5-turbo'
-        }
-        result = validate_config(invalid_config)
-        self.assertFalse(result)
-        
-        # Test missing required key
-        incomplete_config = {
-            'OPENAI_API_KEY': 'sk-test-key',
-            'OPENAI_BASE_URL': 'https://api.openai.com/v1'
-            # Missing OPENAI_MODEL
-        }
-        result = validate_config(incomplete_config)
-        self.assertFalse(result)
+        # Test invalid API key format - should raise ConfigurationError due to validation in __post_init__
+        from ai_commit.exceptions import ConfigurationError
+        with self.assertRaises(ConfigurationError):
+            AICommitConfig(
+                openai_api_key="invalid-key",
+                openai_base_url="https://api.openai.com/v1",
+                openai_model="gpt-3.5-turbo"
+            )
 
     @patch.dict(os.environ, {
-        'OPENAI_API_KEY': 'sk-env-test-key',
+        'OPENAI_API_KEY': 'sk-env-test-key-1234567890abcdef',
         'OPENAI_BASE_URL': 'https://api.openai.com/v1',
         'OPENAI_MODEL': 'gpt-4',
         'LOG_PATH': '.logs',
         'AUTO_COMMIT': 'true'
     })
-    @patch('ai_commit.cli.find_config_files')
-    def test_load_config_from_env_vars(self, mock_find_config):
+    def test_load_config_from_env_vars(self):
         """Test loading configuration from environment variables"""
-        mock_logger = MagicMock()
-        mock_find_config.return_value = (None, None)  # No config file found
+        from ai_commit.config import ConfigurationLoader
         
-        config = load_config(mock_logger)
+        config_loader = ConfigurationLoader()
         
-        self.assertEqual(config['OPENAI_API_KEY'], 'sk-env-test-key')
-        self.assertEqual(config['OPENAI_BASE_URL'], 'https://api.openai.com/v1')
-        self.assertEqual(config['OPENAI_MODEL'], 'gpt-4')
-        self.assertEqual(config['LOG_PATH'], '.logs')
-        self.assertTrue(config['AUTO_COMMIT'])  # Should be converted to boolean
+        # Mock file finding to return no config files
+        with patch.object(config_loader, '_find_config_files', return_value=(None, None)):
+            config = config_loader.load_config()
+            
+            self.assertEqual(config.openai_api_key, 'sk-env-test-key-1234567890abcdef')
+            self.assertEqual(config.openai_base_url, 'https://api.openai.com/v1')
+            self.assertEqual(config.openai_model, 'gpt-4')
+            self.assertEqual(config.log_path, '.logs')
+            self.assertTrue(config.auto_commit)
+
+    def test_ai_client_initialization(self):
+        """Test AI client initialization"""
+        ai_client = AIClient(self.test_config)
+        self.assertIsInstance(ai_client, AIClient)
+        
+        # Test that methods exist
+        self.assertTrue(hasattr(ai_client, 'generate_commit_message'))
+        self.assertTrue(hasattr(ai_client, 'test_connection'))
+
+    def test_file_selector_initialization(self):
+        """Test file selector initialization"""
+        file_selector = FileSelector()
+        
+        # Test that methods exist
+        self.assertTrue(hasattr(file_selector, 'display_file_changes'))
+        self.assertTrue(hasattr(file_selector, 'select_files_interactive'))
+
+    def test_workflow_initialization(self):
+        """Test workflow initialization"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = AICommitConfig(
+                openai_api_key="sk-test-key-1234567890abcdef",
+                openai_base_url="https://api.openai.com/v1",
+                openai_model="gpt-3.5-turbo",
+                log_path=temp_dir
+            )
+            
+            workflow = AICommitWorkflow(config)
+            self.assertIsInstance(workflow, AICommitWorkflow)
+            self.assertEqual(workflow.config, config)
+            self.assertIsNotNone(workflow.git_ops)
+            self.assertIsNotNone(workflow.ai_client)
+            self.assertIsNotNone(workflow.file_selector)
 
 
 if __name__ == '__main__':
