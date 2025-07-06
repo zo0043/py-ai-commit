@@ -4,7 +4,11 @@
       "Bash(python -m pytest tests/ -v)",
       "Bash(python -m build:*)",
       "Bash(rm:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(find:*)",
+      "Bash(python -m pytest tests/test_cli.py -v)",
+      "Bash(python -m pytest tests/test_modular.py -v)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
