@@ -13,6 +13,7 @@ from .config import ConfigurationLoader, AICommitConfig
 from .git import GitOperations
 from .ai import AIClient
 from .utils import FileSelector, LoggingManager, ProgressManager
+from .ui import StatusDisplay, InteractivePrompt, MotivationalMessages, Colors
 from .exceptions import (
     AICommitError, ConfigurationError, GitOperationError, 
     APIError, SecurityError, ValidationError
@@ -104,6 +105,7 @@ class AICommitWorkflow:
             
             # Handle file selection if requested
             if args.interactive or args.all:
+                StatusDisplay.show_header("🎯 文件选择模式", "请选择要分析的文件")
                 self._handle_file_selection(args)
             
             # Validate staged changes
@@ -121,19 +123,24 @@ class AICommitWorkflow:
                 self.progress.show_warning("No changes detected")
                 return
             
-            # Generate commit message
-            self.progress.show_operation("Generating commit message")
+            # Generate commit message with enhanced feedback
+            loading_msg = MotivationalMessages.get_loading_message()
+            self.progress.show_operation(loading_msg)
+            
             branch_name = self.git_ops.get_current_branch()
             context = {'branch_name': branch_name} if branch_name else {}
             
             commit_message = self.ai_client.generate_commit_message(diff, context)
+            
+            success_msg = MotivationalMessages.get_success_message()
+            self.progress.complete_operation(success_msg)
             
             # Display generated message
             self._display_commit_message(commit_message)
             
             # Handle dry run
             if args.dry_run:
-                self.progress.show_info("Dry run mode - skipping commit")
+                self.progress.show_info("🎙️  模拟模式 - 跳过提交")
                 return
             
             # Determine if we should commit
@@ -148,10 +155,10 @@ class AICommitWorkflow:
                 if self.config.auto_push:
                     self._execute_push()
             else:
-                self.progress.show_info("Commit cancelled by user")
+                self.progress.show_info("💫 用户取消提交")
                 
         except KeyboardInterrupt:
-            self.progress.show_warning("Operation cancelled by user")
+            self.progress.show_warning("⚙️  操作已取消")
             sys.exit(1)
         except Exception as e:
             self._handle_error(e)
@@ -188,35 +195,27 @@ class AICommitWorkflow:
                 self.progress.show_info("No unstaged files available for selection")
     
     def _display_commit_message(self, message: str) -> None:
-        """Display the generated commit message."""
-        print("\n" + "="*50)
-        print("📝 Generated Commit Message:")
-        print("="*50)
-        print(message)
-        print("="*50)
+        """Display the generated commit message with enhanced styling."""
+        StatusDisplay.show_commit_message(message)
     
     def _get_user_confirmation(self) -> bool:
-        """Get user confirmation for commit."""
-        try:
-            response = input("\n❓ Commit with this message? (y/N): ").strip().lower()
-            return response in ('y', 'yes')
-        except (KeyboardInterrupt, EOFError):
-            return False
+        """Get user confirmation for commit with enhanced prompt."""
+        return InteractivePrompt.confirm("是否使用该提交信息？", False)
     
     def _execute_commit(self, message: str) -> None:
-        """Execute the git commit."""
-        self.progress.show_operation("Committing changes")
+        """Execute the git commit with enhanced feedback."""
+        self.progress.show_operation("正在提交更改")
         self.git_ops.commit_changes(message)
-        self.progress.show_success("Changes committed successfully")
+        self.progress.complete_operation("🎉 提交成功！")
     
     def _execute_push(self) -> None:
         """Execute git push if auto-push is enabled."""
-        self.progress.show_operation("Pushing changes to remote")
+        self.progress.show_operation("正在推送到远程仓库")
         try:
             self.git_ops.push_changes()
-            self.progress.show_success("Changes pushed successfully")
+            self.progress.complete_operation("🚀 推送成功！")
         except GitOperationError as e:
-            self.progress.show_warning(f"Push failed: {e}")
+            self.progress.show_warning(f"推送失败: {e}")
     
     def _handle_error(self, error: Exception) -> None:
         """Handle different types of errors with appropriate messages."""

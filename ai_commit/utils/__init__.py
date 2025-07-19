@@ -12,6 +12,10 @@ from pathlib import Path
 
 from ..exceptions import FileOperationError
 from ..security import SecureLogger
+from ..ui import (
+    AnimatedSpinner, InteractivePrompt, StatusDisplay, 
+    ProgressBar, MotivationalMessages, Colors, NotificationSound
+)
 
 
 class FileSelector:
@@ -29,25 +33,7 @@ class FileSelector:
             staged_files: List of staged files
             unstaged_files: List of unstaged files
         """
-        print("\n" + "="*60)
-        print("📁 Current Git Status")
-        print("="*60)
-        
-        if staged_files:
-            print(f"\n✅ Staged files ({len(staged_files)}):")
-            for i, file in enumerate(staged_files, 1):
-                print(f"  {i:2d}. {file}")
-        else:
-            print("\n✅ No staged files")
-        
-        if unstaged_files:
-            print(f"\n📝 Unstaged files ({len(unstaged_files)}):")
-            for i, file in enumerate(unstaged_files, 1):
-                print(f"  {i:2d}. {file}")
-        else:
-            print("\n📝 No unstaged files")
-        
-        print("\n" + "="*60)
+        StatusDisplay.show_files_status(staged_files, unstaged_files)
     
     def select_files_interactive(self, unstaged_files: List[str]) -> List[str]:
         """
@@ -60,56 +46,22 @@ class FileSelector:
             List of selected file paths
         """
         if not unstaged_files:
-            print("No unstaged files to select from.")
+            print(Colors.colorize("📝 没有可选择的未暂存文件", Colors.YELLOW))
             return []
         
-        print("\n🎯 Select files to stage and analyze:")
-        print("   Enter file numbers separated by spaces (e.g., 1 3 5)")
-        print("   Enter 'all' to select all files")
-        print("   Enter 'none' or press Enter to skip file selection")
+        selected_indices = InteractivePrompt.select_multiple(
+            unstaged_files, 
+            "选择要暂存和分析的文件"
+        )
         
-        while True:
-            try:
-                response = input("\nSelect files: ").strip().lower()
-                
-                if response == 'all':
-                    selected_files = unstaged_files.copy()
-                    break
-                elif response in ('none', ''):
-                    selected_files = []
-                    break
-                else:
-                    # Parse numbers
-                    numbers = []
-                    for part in response.split():
-                        try:
-                            num = int(part)
-                            if 1 <= num <= len(unstaged_files):
-                                numbers.append(num)
-                            else:
-                                print(f"Invalid number: {num}. Please use numbers 1-{len(unstaged_files)}")
-                        except ValueError:
-                            print(f"Invalid input: {part}. Please enter numbers only.")
-                    
-                    if numbers:
-                        selected_files = [unstaged_files[i-1] for i in numbers]
-                        break
-                    else:
-                        print("No valid numbers entered. Please try again.")
-                        
-            except KeyboardInterrupt:
-                print("\nSelection cancelled.")
-                return []
-            except EOFError:
-                print("\nSelection cancelled.")
-                return []
+        selected_files = [unstaged_files[i] for i in selected_indices]
         
         if selected_files:
-            print(f"\n✅ Selected {len(selected_files)} files:")
+            print(Colors.colorize(f"\n✅ 已选择 {len(selected_files)} 个文件:", Colors.GREEN))
             for file in selected_files:
-                print(f"   - {file}")
+                print(f"   📄 {file}")
         else:
-            print("\n📝 No files selected")
+            print(Colors.colorize("\n📝 未选择任何文件", Colors.YELLOW))
         
         return selected_files
 
@@ -233,21 +185,37 @@ class ColoredFormatter(logging.Formatter):
 
 
 class ProgressManager:
-    """Manages progress display and user feedback."""
+    """Manages progress display and user feedback with enhanced animations."""
     
     def __init__(self):
         """Initialize progress manager."""
         self.current_operation = None
+        self.spinner = AnimatedSpinner()
     
     def show_operation(self, operation: str) -> None:
         """
-        Show current operation to user.
+        Show current operation to user with spinner.
         
         Args:
             operation: Description of current operation
         """
         self.current_operation = operation
-        print(f"🔄 {operation}...")
+        self.spinner.start(operation)
+    
+    def complete_operation(self, success_message: str = None) -> None:
+        """
+        Complete current operation with success message.
+        
+        Args:
+            success_message: Custom success message
+        """
+        if success_message:
+            final_msg = Colors.colorize(f"✅ {success_message}", Colors.GREEN)
+        else:
+            final_msg = Colors.colorize(f"✅ {self.current_operation} 完成", Colors.GREEN)
+        
+        self.spinner.stop(final_msg)
+        NotificationSound.success()
     
     def show_success(self, message: str) -> None:
         """
@@ -256,7 +224,7 @@ class ProgressManager:
         Args:
             message: Success message
         """
-        print(f"✅ {message}")
+        print(Colors.colorize(f"✅ {message}", Colors.GREEN))
     
     def show_warning(self, message: str) -> None:
         """
@@ -265,7 +233,7 @@ class ProgressManager:
         Args:
             message: Warning message
         """
-        print(f"⚠️  {message}")
+        print(Colors.colorize(f"⚠️  {message}", Colors.YELLOW))
     
     def show_error(self, message: str) -> None:
         """
@@ -274,7 +242,9 @@ class ProgressManager:
         Args:
             message: Error message
         """
-        print(f"❌ {message}")
+        self.spinner.stop()
+        print(Colors.colorize(f"❌ {message}", Colors.RED))
+        NotificationSound.error()
     
     def show_info(self, message: str) -> None:
         """
@@ -283,7 +253,7 @@ class ProgressManager:
         Args:
             message: Info message
         """
-        print(f"ℹ️  {message}")
+        print(Colors.colorize(f"ℹ️  {message}", Colors.BLUE))
 
 
 def format_file_size(size_bytes: int) -> str:
