@@ -150,7 +150,7 @@ class LoggingManager:
         # File handler - logs all levels
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(logging.Formatter(
+        file_handler.setFormatter(SafeFormatter(
             '%(asctime)s [%(levelname)s] %(name)s: %(message)s\nDetails: %(details)s\n',
             datefmt='%Y-%m-%d %H:%M:%S'
         ))
@@ -192,6 +192,16 @@ class LoggingManager:
             # Fallback to regular logging
             extra = {'details': details if details else 'No additional details'}
             self.logger.log(level, message, extra=extra)
+
+
+class SafeFormatter(logging.Formatter):
+    """A logging formatter that safely handles missing 'details' field."""
+    
+    def format(self, record):
+        # Ensure 'details' field exists
+        if not hasattr(record, 'details'):
+            record.details = 'No additional details'
+        return super().format(record)
 
 
 class ColoredFormatter(logging.Formatter):
