@@ -10,8 +10,7 @@
       "Bash(python -m pytest tests/test_modular.py -v)",
       "Bash(git add:*)",
       "Bash(python:*)",
-      "Bash(ai-commit:*)",
-      "Bash(git reset:*)"
+      "Bash(ai-commit:*)"
     ],
     "deny": []
   }
