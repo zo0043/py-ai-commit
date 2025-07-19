@@ -167,7 +167,7 @@ class LoggingManager:
         self.secure_logger = SecureLogger(logger)
         
         self.logger = logger
-        self.logger.info(f"Logging initialized - log file: {log_file}")
+        self.logger.info(f"Logging initialized - log file: {log_file}", extra={'details': 'System initialization'})
     
     def get_logger(self) -> logging.Logger:
         """Get the configured logger."""

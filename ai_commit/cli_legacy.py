@@ -139,14 +139,16 @@ def validate_config(config: Dict[str, Any]) -> bool:
         if key not in config or not config[key]:
             return False
     
-    # Validate API key format (basic check)
+    # Validate API key format (basic check for OpenAI and other providers)
     api_key = config['OPENAI_API_KEY']
-    if not api_key.startswith(('sk-', 'sk-proj-')):
+    # Support OpenAI (sk-), GLM/Zhipu AI, and other formats - just check not empty and reasonable length
+    if len(api_key) < 20:
         return False
     
     # Validate model name
     model = config['OPENAI_MODEL']
-    valid_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini']
+    valid_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 
+                   'glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-4v', 'glm-4v-plus']
     if model not in valid_models:
         print(f"Warning: Using potentially unsupported model '{model}'. Supported models: {', '.join(valid_models)}")
     

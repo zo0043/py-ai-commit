@@ -70,7 +70,8 @@ class AICommitConfig:
             # Validate model name
             valid_models = [
                 'gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini',
-                'gpt-3.5-turbo-16k', 'gpt-4-32k'
+                'gpt-3.5-turbo-16k', 'gpt-4-32k',
+                'glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-4v', 'glm-4v-plus'
             ]
             if self.openai_model not in valid_models:
                 logger.warning(
