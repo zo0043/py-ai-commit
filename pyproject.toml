@@ -36,6 +36,7 @@ Issues = "https://github.com/zero0043/py-ai-commit/issues"
 
 [project.scripts]
 ai-commit = "ai_commit.cli:main"
+acc = "ai_commit.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ai_commit*"]
