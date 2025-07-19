@@ -8,7 +8,9 @@
       "Bash(find:*)",
       "Bash(python -m pytest tests/test_cli.py -v)",
       "Bash(python -m pytest tests/test_modular.py -v)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(python:*)",
+      "Bash(ai-commit:*)"
     ],
     "deny": []
   }
