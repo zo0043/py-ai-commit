@@ -22,7 +22,7 @@
 ## 安装
 
 ```bash
-pip install git+https://github.com/zo0043/py-ai-commit.git
+pip install --force-reinstall git+https://github.com/zo0043/py-ai-commit.git
 ```
 
 ## 使用方法

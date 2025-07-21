@@ -10,7 +10,12 @@
       "Bash(python -m pytest tests/test_modular.py -v)",
       "Bash(git add:*)",
       "Bash(python:*)",
-      "Bash(ai-commit:*)"
+      "Bash(ai-commit:*)",
+      "Bash(ls:*)",
+      "Bash(source:*)",
+      "Bash(echo $VIRTUAL_ENV)",
+      "Bash(/Users/zero0043/anaconda3/bin/python -c \"\ntry:\n    import keyring\n    print(''✅ keyring available'')\nexcept ImportError:\n    print(''❌ keyring missing'')\n\ntry:\n    from dotenv import load_dotenv\n    print(''✅ python-dotenv available'')\nexcept ImportError:\n    print(''❌ python-dotenv missing'')\n\ntry:\n    import openai\n    print(''✅ openai available'')\nexcept ImportError:\n    print(''❌ openai missing'')\n\")",
+      "Bash(/Users/zero0043/anaconda3/bin/python -c \"\nimport sys\nsys.path.insert(0, ''.'')\n\nfrom ai_commit.config import ConfigurationLoader, AICommitConfig\nfrom ai_commit.exceptions import ConfigurationError\n\ntry:\n    print(''Testing configuration loading with anaconda python...'')\n    loader = ConfigurationLoader()\n    config = loader.load_config(''.aicommit'')\n    \n    print(''✅ Configuration loaded successfully'')\n    print(''Validating configuration...'')\n    config.validate()\n    print(''✅ Configuration validation passed'')\n    \nexcept ConfigurationError as e:\n    print(f''❌ ConfigurationError: {e}'')\nexcept Exception as e:\n    print(f''❌ Unexpected error: {type(e).__name__}: {e}'')\n    import traceback\n    traceback.print_exc()\n\")"
     ],
     "deny": []
   }
