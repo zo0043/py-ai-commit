@@ -46,7 +46,7 @@ class FileSelector:
             List of selected file paths
         """
         if not unstaged_files:
-            print(Colors.colorize("📝 没有可选择的未暂存文件", Colors.YELLOW))
+            print("没有可选择的未暂存文件")
             return []
         
         selected_indices = InteractivePrompt.select_multiple(
@@ -57,11 +57,11 @@ class FileSelector:
         selected_files = [unstaged_files[i] for i in selected_indices]
         
         if selected_files:
-            print(Colors.colorize(f"\n✅ 已选择 {len(selected_files)} 个文件:", Colors.GREEN))
+            print(f"\n已选择 {len(selected_files)} 个文件:")
             for file in selected_files:
-                print(f"   📄 {file}")
+                print(f"  - {file}")
         else:
-            print(Colors.colorize("\n📝 未选择任何文件", Colors.YELLOW))
+            print("\n未选择任何文件")
         
         return selected_files
 
