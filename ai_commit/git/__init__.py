@@ -214,8 +214,15 @@ class GitOperations:
             logger.debug("No files to stage")
             return True
         
+        # Filter out files that should be ignored
+        filtered_files = self._filter_stageable_files(files)
+        
+        if not filtered_files:
+            logger.debug("No stageable files after filtering")
+            return True
+        
         try:
-            for file in files:
+            for file in filtered_files:
                 # Validate file path
                 file_path = Path(file)
                 if not file_path.exists():
@@ -230,13 +237,77 @@ class GitOperations:
                     timeout=10
                 )
             
-            logger.info(f"Successfully staged {len(files)} files")
+            logger.info(f"Successfully staged {len(filtered_files)} files")
             return True
             
         except subprocess.CalledProcessError as e:
             raise GitOperationError(f"Failed to stage files: {e}")
         except subprocess.TimeoutExpired:
             raise GitOperationError("Git add command timed out")
+    
+    def _filter_stageable_files(self, files: List[str]) -> List[str]:
+        """
+        Filter out files that should not be staged (e.g., ignored files).
+        
+        Args:
+            files: List of file paths to filter
+            
+        Returns:
+            Filtered list of stageable files
+        """
+        stageable_files = []
+        
+        for file in files:
+            try:
+                # Check if file is ignored by git
+                result = subprocess.run(
+                    ['git', 'check-ignore', file],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                # If git check-ignore returns 0, the file is ignored
+                if result.returncode == 0:
+                    logger.debug(f"Skipping ignored file: {file}")
+                    continue
+                    
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Timeout checking ignore status for: {file}")
+                continue
+            except subprocess.CalledProcessError:
+                # If git check-ignore fails (return code != 0), file is not ignored
+                pass
+            
+            # Additional filter for known log patterns
+            if self._is_log_file(file):
+                logger.debug(f"Skipping log file: {file}")
+                continue
+                
+            stageable_files.append(file)
+        
+        return stageable_files
+    
+    def _is_log_file(self, file_path: str) -> bool:
+        """
+        Check if a file is a log file that should not be staged.
+        
+        Args:
+            file_path: Path to check
+            
+        Returns:
+            True if file is a log file, False otherwise
+        """
+        file_path = file_path.lower()
+        log_patterns = [
+            '.commitlogs/',
+            '.log',
+            'logs/',
+            '/logs/',
+            'commit_',
+        ]
+        
+        return any(pattern in file_path for pattern in log_patterns)
     
     def commit_changes(self, commit_message: str) -> bool:
         """
