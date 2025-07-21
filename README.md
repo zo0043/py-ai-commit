@@ -1,32 +1,72 @@
 # AI Commit
 
-AI-powered git commit message generator using OpenAI API.
+🤖 AI-powered git commit message generator using OpenAI API with modern modular architecture.
 
 **English** | [简体中文](README_CN.md)
 
-## Features
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/zero0043/py-ai-commit/releases)
+[![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-- Automatically generates clear and descriptive commit messages
-- Follows conventional commit format
-- Supports multiple OpenAI models
-- Flexible configuration options
-- Command-line interface with various options
-- Detailed logging system
-- Auto-commit support
-- Auto-push support
-- Branch context awareness
-ff
-## Installation
+## ✨ Features
 
+### 🎯 Core Functionality
+- **AI-Powered**: Automatically generates clear, descriptive commit messages using OpenAI API
+- **Conventional Commits**: Follows conventional commit format for consistent git history
+- **Multi-Model Support**: Compatible with various OpenAI models (GPT-3.5, GPT-4, etc.)
+- **Branch Context**: Automatically includes current branch context for more relevant messages
+
+### 🔧 Advanced Features
+- **Interactive File Selection** (`-i`): Choose specific files to analyze and commit
+- **Auto-staging Mode** (`-a`): Automatically stage all changed files
+- **Smart File Discovery**: Detects staged, unstaged, and untracked files
+- **Rich Terminal UI**: Beautiful progress indicators, animations, and colored output
+- **Comprehensive Logging**: Daily log files with detailed operation tracking
+- **Security-First**: Built-in API key management and input validation
+- **Modular Architecture**: Clean, maintainable codebase with 7 specialized modules
+
+### ⚡ Automation & Control
+- **Auto-commit**: Skip confirmation prompts (`-y` flag)
+- **Auto-push**: Automatically push after successful commits
+- **Dry-run Mode**: Preview commit messages without actual commits
+- **Flexible Configuration**: Environment variables, config files, and CLI overrides
+## 🚀 Installation
+
+### Quick Install
 ```bash
-pip install git+https://github.com/zo0043/py-ai-commit.git
+pip install git+https://github.com/zero0043/py-ai-commit.git
 ```
 
-## Usage
+### Development Install
+```bash
+git clone https://github.com/zero0043/py-ai-commit.git
+cd py-ai-commit
+pip install -e .
+```
 
-Basic usage in any git repository:
+### Alternative Command
+After installation, you can use either:
+- `ai-commit` (main command)
+- `acc` (short alias)
+
+## 💡 Usage
+
+### Basic Usage
+In any git repository with staged changes:
 
 ```bash
+ai-commit
+```
+
+### Quick Start
+```bash
+# First time setup - copy template and edit with your API key
+cp .aicommit_template .aicommit
+
+# Stage some changes
+git add .
+
+# Generate and commit with AI
 ai-commit
 ```
 
@@ -74,7 +114,7 @@ options:
   -a, --all          Analyze and stage all changed files automatically
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 You can configure the tool in multiple ways (in order of priority):
 
@@ -125,7 +165,7 @@ Configuration values are applied in this order (highest to lowest priority):
 2. Configuration file settings (.aicommit or .env)
 3. Environment variables (lowest priority)
 
-## Features in Detail
+## 🔍 Features in Detail
 
 ### Auto-Commit Mode
 
@@ -167,7 +207,7 @@ ai-commit -v
 
 The tool automatically includes the current branch name in the commit message generation context for more relevant messages.
 
-## Logging
+## 📝 Logging
 
 Logs are stored in the configured `LOG_PATH` directory (default: `.commitLogs`):
 - Daily log files: `commit_YYYYMMDD.log`
@@ -180,7 +220,7 @@ Logs are stored in the configured `LOG_PATH` directory (default: `.commitLogs`):
   - Push operations
   - Errors and warnings
 
-## Error Handling
+## 🛡️ Error Handling
 
 The tool includes robust error handling for:
 - Missing configuration
@@ -190,8 +230,34 @@ The tool includes robust error handling for:
 - Invalid staged changes
 - Push failures
 
-## License
+## 🏗️ Architecture
 
-MIT
-# Test change
-# Test change
+This project features a modern modular architecture with the following components:
+
+- **`ai_commit.config`** - Configuration management with security integration
+- **`ai_commit.git`** - Git operations and repository management  
+- **`ai_commit.ai`** - AI client with retry logic and error handling
+- **`ai_commit.utils`** - File selection, logging, and progress management
+- **`ai_commit.ui`** - Rich terminal interface with animations and colors
+- **`ai_commit.security`** - API key management and input validation
+- **`ai_commit.exceptions`** - Comprehensive error handling system
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'feat: add some amazing feature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [OpenAI API](https://openai.com/api/)
+- Inspired by conventional commit standards
+- Thanks to all contributors and users!
