@@ -96,11 +96,10 @@ class InteractivePrompt:
     
     @staticmethod
     def confirm(message: str, default: bool = False) -> bool:
-        """Enhanced confirmation prompt."""
+        """简化的确认提示."""
         default_text = "Y/n" if default else "y/N"
         
-        print(f"\n┌─ 🤔 {message}")
-        print(f"└─ ({default_text}): ", end="", flush=True)
+        print(f"\n{message} ({default_text}): ", end="", flush=True)
         
         try:
             response = input().strip().lower()
@@ -108,23 +107,18 @@ class InteractivePrompt:
                 return default
             return response in ('y', 'yes', '是', '好')
         except (KeyboardInterrupt, EOFError):
-            print("\n⚠️  操作已取消")
+            print("\n操作已取消")
             return False
     
     @staticmethod
     def select_multiple(options: List[str], prompt: str = "选择选项") -> List[int]:
-        """Multi-select prompt with enhanced UI."""
-        print(f"\n┌─ 🎯 {prompt}")
-        print("├─ 可选项:")
+        """简化的多选提示界面."""
+        print(f"\n{prompt}:")
         
         for i, option in enumerate(options, 1):
-            print(f"│  {i:2d}. {option}")
+            print(f"  {i}. {option}")
         
-        print("├─ 输入格式:")
-        print("│  • 数字用空格分隔 (如: 1 3 5)")
-        print("│  • 'all' 选择全部")
-        print("│  • 回车键跳过")
-        print("└─ 你的选择: ", end="", flush=True)
+        print("\n选择 (数字空格分隔, all=全选, 回车=跳过): ", end="", flush=True)
         
         try:
             response = input().strip().lower()
@@ -145,7 +139,7 @@ class InteractivePrompt:
                 return numbers
                 
         except (KeyboardInterrupt, EOFError):
-            print("\n⚠️  选择已取消")
+            print("\n操作已取消")
             return []
 
 
@@ -165,25 +159,22 @@ class StatusDisplay:
     
     @staticmethod
     def show_files_status(staged: List[str], unstaged: List[str]) -> None:
-        """Show file status with improved layout."""
-        print("\n📋 Git 状态总览")
-        print("━" * 50)
+        """简化的文件状态显示."""
+        print("\nGit 文件状态:")
         
         if staged:
-            print(f"\n✅ 已暂存文件 ({len(staged)})")
+            print(f"\n已暂存 ({len(staged)}):")
             for i, file in enumerate(staged, 1):
-                print(f"   {i:2d} │ {file}")
-        else:
-            print("\n✅ 暂无已暂存文件")
+                print(f"  {i}. {file}")
         
         if unstaged:
-            print(f"\n📝 未暂存文件 ({len(unstaged)})")
+            print(f"\n未暂存 ({len(unstaged)}):")
             for i, file in enumerate(unstaged, 1):
-                status_icon = "🆕" if file.startswith("??") else "📝"
                 clean_file = file[3:] if file.startswith(("A  ", "M  ", "?? ")) else file
-                print(f"   {i:2d} │ {status_icon} {clean_file}")
-        else:
-            print("\n📝 暂无未暂存文件")
+                print(f"  {i}. {clean_file}")
+        
+        if not staged and not unstaged:
+            print("  暂无变更")
         
         print("━" * 50)
     
