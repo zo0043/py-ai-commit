@@ -99,7 +99,7 @@ class InteractivePrompt:
         """简化的确认提示."""
         default_text = "Y/n" if default else "y/N"
         
-        print(f"\n{message} ({default_text}): ", end="", flush=True)
+        print(f"\n{message} ({default_text}): ")
         
         try:
             response = input().strip().lower()
@@ -118,7 +118,7 @@ class InteractivePrompt:
         for i, option in enumerate(options, 1):
             print(f"  {i}. {option}")
         
-        print("\n选择 (数字空格分隔, all=全选, 回车=跳过): ", end="", flush=True)
+        print("\n选择 (数字空格分隔, all=全选, 回车=跳过): ")
         
         try:
             response = input().strip().lower()

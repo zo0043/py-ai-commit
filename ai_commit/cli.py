@@ -168,6 +168,7 @@ class AICommitWorkflow:
         """Handle interactive or automatic file selection."""
         self.progress.show_operation("Discovering file changes")
         staged_files, unstaged_files = self.git_ops.get_changed_files()
+        self.progress.complete_operation("File discovery completed")
         
         # Display current status
         self.file_selector.display_file_changes(staged_files, unstaged_files)
