@@ -12,6 +12,7 @@ import importlib.util
 import logging
 import json
 import yaml
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Type, Callable
 from dataclasses import dataclass, field
@@ -23,6 +24,8 @@ import traceback
 from ..exceptions import PluginError, ConfigurationError
 from ..security import InputValidator
 from ..core.event_system import EventManager, EventType, Event
+from ..config.enhanced_config import PluginConfigManager, ConfigSource
+from .error_handling import PluginErrorHandler, ErrorContext, ErrorLevel, ErrorCategory, PluginPerformanceMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +189,7 @@ class ProcessorPlugin(PluginInterface):
 
 
 class PluginConfig:
-    """插件配置管理"""
+    """插件配置管理（保持向后兼容性）"""
     
     def __init__(self, config_path: str = "plugins.yaml"):
         """
@@ -196,37 +199,17 @@ class PluginConfig:
             config_path: 配置文件路径
         """
         self.config_path = Path(config_path)
-        self.config = {}
-        self.load_config()
+        self.enhanced_config = PluginConfigManager(config_path)
+        self.config = self.enhanced_config.get_all_config()
     
     def load_config(self) -> None:
-        """加载插件配置"""
-        if not self.config_path.exists():
-            self.config = self._get_default_config()
-            self.save_config()
-            return
-        
-        try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                if self.config_path.suffix.lower() == '.yaml':
-                    self.config = yaml.safe_load(f)
-                else:
-                    self.config = json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to load plugin config: {e}")
-            self.config = self._get_default_config()
+        """加载插件配置（委托给增强配置管理器）"""
+        self.enhanced_config.reload_config()
+        self.config = self.enhanced_config.get_all_config()
     
     def save_config(self) -> None:
-        """保存插件配置"""
-        try:
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                if self.config_path.suffix.lower() == '.yaml':
-                    yaml.dump(self.config, f, default_flow_style=False, indent=2)
-                else:
-                    json.dump(self.config, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save plugin config: {e}")
+        """保存插件配置（委托给增强配置管理器）"""
+        self.enhanced_config.save_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
         """获取默认配置"""
@@ -314,6 +297,66 @@ class PluginConfig:
             self.config['enabled_plugins'].remove(plugin_name)
         
         self.save_config()
+    
+    def get_config_source(self, key: str) -> Optional[str]:
+        """
+        获取配置来源
+        
+        Args:
+            key: 配置键
+            
+        Returns:
+            配置来源
+        """
+        source = self.enhanced_config.get_config_source(key)
+        return source.value if source else None
+    
+    def get_config_info(self) -> Dict[str, Dict[str, Any]]:
+        """
+        获取配置详细信息
+        
+        Returns:
+            配置信息字典
+        """
+        return self.enhanced_config.get_config_info()
+    
+    def register_plugin_schema(self, plugin_name: str, schema: Dict[str, Any]) -> None:
+        """
+        注册插件配置模式
+        
+        Args:
+            plugin_name: 插件名称
+            schema: 配置模式
+        """
+        self.enhanced_config.register_plugin_schema(plugin_name, schema)
+    
+    def validate_plugin_config(self, plugin_name: str, config: Dict[str, Any]) -> bool:
+        """
+        验证插件配置
+        
+        Args:
+            plugin_name: 插件名称
+            config: 插件配置
+            
+        Returns:
+            验证是否通过
+        """
+        return self.enhanced_config.validate_plugin_config(plugin_name, config)
+    
+    def merge_config(self, new_config: Dict[str, Any]) -> None:
+        """
+        合并配置
+        
+        Args:
+            new_config: 新配置
+        """
+        self.enhanced_config.merge_config(new_config)
+        self.config = self.enhanced_config.get_all_config()
+    
+    def reset_to_defaults(self) -> None:
+        """重置为默认配置"""
+        self.enhanced_config.reset_to_defaults()
+        self.config = self.enhanced_config.get_all_config()
 
 
 class PluginManager:
@@ -333,6 +376,17 @@ class PluginManager:
         self.plugin_types: Dict[PluginType, List[str]] = {}
         self.event_manager: Optional[EventManager] = None
         self.validator = InputValidator()
+        self.performance_stats = {
+            'plugins_loaded': 0,
+            'plugins_enabled': 0,
+            'plugins_failed': 0,
+            'load_time': 0,
+            'execution_time': 0
+        }
+        
+        # 初始化错误处理和性能监控
+        self.error_handler = PluginErrorHandler()
+        self.performance_monitor = PluginPerformanceMonitor()
         
         # 初始化插件类型索引
         for plugin_type in PluginType:
@@ -400,11 +454,24 @@ class PluginManager:
             logger.warning(f"Plugin {plugin_name} already loaded")
             return True
         
+        # 开始性能监控
+        timer_id = self.performance_monitor.start_plugin_load_timer(plugin_name)
+        
         try:
             # 查找插件文件
             plugin_class = self._find_plugin_class(plugin_name)
             if not plugin_class:
-                logger.error(f"Plugin class not found: {plugin_name}")
+                error_context = ErrorContext(
+                    plugin_name=plugin_name,
+                    operation="load_plugin",
+                    additional_info={"step": "find_plugin_class"}
+                )
+                self.error_handler.handle_error(
+                    Exception(f"Plugin class not found: {plugin_name}"),
+                    error_context,
+                    ErrorLevel.ERROR,
+                    ErrorCategory.EXECUTION
+                )
                 return False
             
             # 创建插件实例
@@ -413,7 +480,17 @@ class PluginManager:
             
             # 验证插件
             if not self._validate_plugin(plugin_instance):
-                logger.error(f"Plugin validation failed: {plugin_name}")
+                error_context = ErrorContext(
+                    plugin_name=plugin_name,
+                    operation="load_plugin",
+                    additional_info={"step": "validate_plugin"}
+                )
+                self.error_handler.handle_error(
+                    Exception(f"Plugin validation failed: {plugin_name}"),
+                    error_context,
+                    ErrorLevel.ERROR,
+                    ErrorCategory.VALIDATION
+                )
                 return False
             
             # 存储插件
@@ -425,6 +502,12 @@ class PluginManager:
             plugin_type = plugin_instance.metadata.plugin_type
             if plugin_name not in self.plugin_types[plugin_type]:
                 self.plugin_types[plugin_type].append(plugin_name)
+            
+            # 结束性能监控
+            self.performance_monitor.end_plugin_load_timer(plugin_name, timer_id)
+            
+            # 记录成功加载
+            self.performance_stats['plugins_loaded'] += 1
             
             logger.info(f"Plugin loaded successfully: {plugin_name}")
             
@@ -438,8 +521,20 @@ class PluginManager:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to load plugin {plugin_name}: {e}")
+            # 结束性能监控
+            self.performance_monitor.end_plugin_load_timer(plugin_name, timer_id)
+            
+            # 处理错误
+            error_context = ErrorContext(
+                plugin_name=plugin_name,
+                operation="load_plugin",
+                additional_info={"step": "general_load"}
+            )
+            self.error_handler.handle_error(e, error_context)
+            
             self.plugin_status[plugin_name] = PluginStatus.ERROR
+            self.performance_stats['plugins_failed'] += 1
+            
             return False
     
     def _find_plugin_class(self, plugin_name: str) -> Optional[Type[PluginInterface]]:
@@ -839,12 +934,33 @@ class PluginManager:
         
         for plugin in hook_plugins:
             if plugin.is_enabled() and isinstance(plugin, HookPlugin):
+                start_time = time.time()
+                success = False
+                
                 try:
                     hook_result = plugin.execute_hook(result)
                     if hook_result:
                         result.update(hook_result)
+                    success = True
+                    
                 except Exception as e:
-                    logger.error(f"Hook execution failed for {plugin.metadata.name}: {e}")
+                    # 处理错误
+                    error_context = ErrorContext(
+                        plugin_name=plugin.metadata.name,
+                        operation=f"execute_hook:{hook_name}",
+                        additional_info={"hook_name": hook_name, "context": context}
+                    )
+                    self.error_handler.handle_error(e, error_context)
+                    
+                finally:
+                    # 记录性能
+                    duration = time.time() - start_time
+                    self.performance_monitor.record_plugin_execution(
+                        plugin.metadata.name,
+                        f"hook:{hook_name}",
+                        duration,
+                        success
+                    )
         
         return result
     
@@ -866,10 +982,31 @@ class PluginManager:
         
         for plugin in processor_plugins:
             if plugin.is_enabled() and isinstance(plugin, ProcessorPlugin):
+                start_time = time.time()
+                success = False
+                
                 try:
                     result = plugin.process(result)
+                    success = True
+                    
                 except Exception as e:
-                    logger.error(f"Data processing failed for {plugin.metadata.name}: {e}")
+                    # 处理错误
+                    error_context = ErrorContext(
+                        plugin_name=plugin.metadata.name,
+                        operation=f"process_data:{processor_type.value}",
+                        additional_info={"processor_type": processor_type.value}
+                    )
+                    self.error_handler.handle_error(e, error_context)
+                    
+                finally:
+                    # 记录性能
+                    duration = time.time() - start_time
+                    self.performance_monitor.record_plugin_execution(
+                        plugin.metadata.name,
+                        f"process:{processor_type.value}",
+                        duration,
+                        success
+                    )
         
         return result
     
@@ -916,6 +1053,151 @@ class PluginManager:
             self.unload_plugin(plugin_name)
         
         logger.info("Plugin manager cleaned up")
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """
+        获取性能统计信息
+        
+        Returns:
+            性能统计信息
+        """
+        return self.performance_stats.copy()
+    
+    def reset_performance_stats(self) -> None:
+        """重置性能统计"""
+        self.performance_stats = {
+            'plugins_loaded': 0,
+            'plugins_enabled': 0,
+            'plugins_failed': 0,
+            'load_time': 0,
+            'execution_time': 0
+        }
+    
+    def get_plugin_dependencies(self, plugin_name: str) -> List[str]:
+        """
+        获取插件的依赖关系
+        
+        Args:
+            plugin_name: 插件名称
+            
+        Returns:
+            依赖列表
+        """
+        if plugin_name not in self.plugin_metadata:
+            return []
+        
+        return self.plugin_metadata[plugin_name].dependencies
+    
+    def check_dependency_conflicts(self) -> List[Dict[str, Any]]:
+        """
+        检查依赖冲突
+        
+        Returns:
+            冲突列表
+        """
+        conflicts = []
+        
+        for plugin_name, metadata in self.plugin_metadata.items():
+            for dep in metadata.dependencies:
+                if dep not in self.plugins:
+                    conflicts.append({
+                        'type': 'missing_dependency',
+                        'plugin': plugin_name,
+                        'dependency': dep
+                    })
+        
+        return conflicts
+    
+    def optimize_plugin_loading(self) -> None:
+        """优化插件加载顺序"""
+        # 根据依赖关系重新排序插件
+        loaded_order = list(self.plugins.keys())
+        optimized_order = self._resolve_dependencies(loaded_order)
+        
+        # 重新加载插件以优化顺序
+        for plugin_name in optimized_order:
+            if plugin_name in self.plugins and self.plugins[plugin_name].is_enabled():
+                self.disable_plugin(plugin_name)
+                self.enable_plugin(plugin_name)
+    
+    def _resolve_dependencies(self, plugin_names: List[str]) -> List[str]:
+        """
+        解析依赖关系
+        
+        Args:
+            plugin_names: 插件名称列表
+            
+        Returns:
+            解析后的插件顺序
+        """
+        resolved = []
+        unresolved = set(plugin_names)
+        
+        while unresolved:
+            # 找到没有未解析依赖的插件
+            ready = []
+            for plugin_name in unresolved:
+                deps = self.get_plugin_dependencies(plugin_name)
+                if all(dep in resolved for dep in deps):
+                    ready.append(plugin_name)
+            
+            if not ready:
+                # 循环依赖
+                break
+            
+            resolved.extend(ready)
+            unresolved -= set(ready)
+        
+        return resolved
+    
+    def get_plugin_health(self, plugin_name: str) -> Dict[str, Any]:
+        """
+        获取插件健康状态
+        
+        Args:
+            plugin_name: 插件名称
+            
+        Returns:
+            健康状态信息
+        """
+        if plugin_name not in self.plugins:
+            return {'status': 'not_loaded'}
+        
+        plugin = self.plugins[plugin_name]
+        status = self.plugin_status[plugin_name]
+        
+        health = {
+            'name': plugin_name,
+            'status': status.value,
+            'enabled': plugin.is_enabled(),
+            'initialized': plugin.is_initialized(),
+            'dependencies': self.get_plugin_dependencies(plugin_name),
+            'dependency_status': 'resolved'
+        }
+        
+        # 检查依赖状态
+        for dep in health['dependencies']:
+            if dep not in self.plugins:
+                health['dependency_status'] = 'missing'
+                break
+        
+        return health
+    
+    def get_system_health(self) -> Dict[str, Any]:
+        """
+        获取系统健康状态
+        
+        Returns:
+            系统健康状态
+        """
+        return {
+            'total_plugins': len(self.plugins),
+            'enabled_plugins': len([p for p in self.plugins.values() if p.is_enabled()]),
+            'disabled_plugins': len([p for p in self.plugins.values() if not p.is_enabled()]),
+            'failed_plugins': len([s for s in self.plugin_status.values() if s == PluginStatus.ERROR]),
+            'dependency_conflicts': self.check_dependency_conflicts(),
+            'performance_stats': self.get_performance_stats()
+        }
 
 
 # 全局插件管理器实例
