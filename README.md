@@ -1,6 +1,6 @@
 # AI Commit
 
-🤖 AI-powered git commit message generator using OpenAI API with modern modular architecture.
+🤖 AI-powered git commit message generator using OpenAI API with advanced file splitting and large commit handling.
 
 **English** | [简体中文](README_CN.md)
 
@@ -23,13 +23,21 @@
 - **Rich Terminal UI**: Beautiful progress indicators, animations, and colored output
 - **Comprehensive Logging**: Daily log files with detailed operation tracking
 - **Security-First**: Built-in API key management and input validation
-- **Modular Architecture**: Clean, maintainable codebase with 7 specialized modules
+- **Modular Architecture**: Clean, maintainable codebase with specialized modules
+
+### 🚀 **NEW: Large Commit Handling**
+- **Automatic File Splitting**: Intelligently splits large commits into manageable chunks
+- **Smart Diff Processing**: Handles git diffs up to 10MB in size
+- **Context Preservation**: Maintains commit context even when splitting large files
+- **Chunk Summarization**: Creates comprehensive summaries from split diffs
+- **Configurable Chunk Sizes**: Adjustable chunk sizes (default: 500KB per chunk)
 
 ### ⚡ Automation & Control
 - **Auto-commit**: Skip confirmation prompts (`-y` flag)
 - **Auto-push**: Automatically push after successful commits
 - **Dry-run Mode**: Preview commit messages without actual commits
 - **Flexible Configuration**: Environment variables, config files, and CLI overrides
+
 ## 🚀 Installation
 
 ### Quick Install
@@ -113,6 +121,58 @@ options:
   -i, --interactive   Interactively select files to analyze and commit
   -a, --all          Analyze and stage all changed files automatically
 ```
+
+## 🔧 Large Commit Handling
+
+### Automatic File Splitting
+
+The tool now automatically handles large commits by splitting them into manageable chunks:
+
+- **Detection**: Automatically detects commits larger than 500KB
+- **Splitting**: Splits diffs by individual file boundaries
+- **Truncation**: For extremely large files, intelligently truncates while preserving context
+- **Summarization**: Creates structured summaries with file information
+- **Processing**: Processes chunks and generates comprehensive commit messages
+
+### Example Large Commit Output
+
+When processing large commits, the tool generates summaries like:
+
+```
+# Large commit diff summary
+# Original diff size: 2714806 characters
+# Split into 6 manageable chunks
+#
+# Files changed: 15
+#   - src/main.py
+#   - src/utils.py
+#   - tests/test_main.py
+#   - ... (12 more files)
+#
+# Detailed changes (first chunk only):
+#
+diff --git a/src/main.py b/src/main.py
+index abc123..def456 100644
+--- a/src/main.py
++++ b/src/main.py
+@@ -1,5 +1,7 @@
+ def main():
++    # New feature implementation
++    print("Hello, World!")
+     return 0
+
+#
+# ... 5 additional chunks omitted for brevity
+# Use individual file commits or review the complete diff separately
+```
+
+### Configuration Options
+
+The large commit handling is configurable:
+
+- **`split_large_files`**: Enable/disable automatic splitting (default: `true`)
+- **`max_chunk_size`**: Maximum size per chunk in characters (default: `500000`)
+- **`MAX_DIFF_SIZE`**: Maximum allowed diff size (default: `10MB`)
 
 ## ⚙️ Configuration
 
@@ -218,6 +278,7 @@ Logs are stored in the configured `LOG_PATH` directory (default: `.commitLogs`):
   - API calls
   - Commit process
   - Push operations
+  - Large commit splitting operations
   - Errors and warnings
 
 ## 🛡️ Error Handling
@@ -228,6 +289,7 @@ The tool includes robust error handling for:
 - Network issues (with automatic retries)
 - Git repository errors
 - Invalid staged changes
+- Large commit processing errors
 - Push failures
 
 ## 🏗️ Architecture
@@ -235,12 +297,23 @@ The tool includes robust error handling for:
 This project features a modern modular architecture with the following components:
 
 - **`ai_commit.config`** - Configuration management with security integration
-- **`ai_commit.git`** - Git operations and repository management  
+- **`ai_commit.git`** - Git operations, repository management, and large commit handling
 - **`ai_commit.ai`** - AI client with retry logic and error handling
 - **`ai_commit.utils`** - File selection, logging, and progress management
 - **`ai_commit.ui`** - Rich terminal interface with animations and colors
 - **`ai_commit.security`** - API key management and input validation
 - **`ai_commit.exceptions`** - Comprehensive error handling system
+
+### Large Commit Processing Architecture
+
+The large commit handling is implemented in the `GitOperations` class with:
+
+- **`get_git_diff()`**: Enhanced with splitting parameters
+- **`_split_and_process_diff()`**: Main splitting algorithm
+- **`_split_diff_by_files()`**: Splits diffs by file boundaries
+- **`_truncate_large_file_diff()`**: Handles extremely large files
+- **`_create_diff_summary()`**: Creates structured summaries
+- **`_extract_files_from_diff()`**: Extracts file information
 
 ## 🤝 Contributing
 
