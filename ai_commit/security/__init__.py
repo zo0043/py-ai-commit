@@ -99,7 +99,7 @@ class InputValidator:
         r'(?i)[a-zA-Z0-9/+]{88}==',
     ]
 
-    MAX_DIFF_SIZE = 1024 * 1024  # 1MB max diff size
+    MAX_DIFF_SIZE = 10 * 1024 * 1024  # 10MB max diff size
     MAX_COMMIT_MESSAGE_LENGTH = 200
 
     @classmethod
