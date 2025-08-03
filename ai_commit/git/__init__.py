@@ -344,9 +344,13 @@ class GitOperations:
         except subprocess.TimeoutExpired:
             raise GitOperationError("Git command timed out while getting changed files")
 
-    def get_git_diff(self) -> str:
+    def get_git_diff(self, split_large_files: bool = True, max_chunk_size: int = 500000) -> str:
         """
         Get git diff of staged and unstaged changes.
+
+        Args:
+            split_large_files: Whether to split large diffs into chunks
+            max_chunk_size: Maximum size of each diff chunk in characters
 
         Returns:
             Git diff content
@@ -356,9 +360,8 @@ class GitOperations:
             ValidationError: If diff content is invalid
         """
         try:
-            # Use single git command to get all required information
-            # This reduces subprocess calls from 4 to 1
-            result = subprocess.run(
+            # Get staged and unstaged changes
+            staged_result = subprocess.run(
                 ['git', 'diff', '--stat', '--cached', '--unified=3'],
                 capture_output=True,
                 text=True,
@@ -366,7 +369,6 @@ class GitOperations:
                 timeout=30
             )
 
-            # Get unstaged changes only (staged already included above)
             unstaged_result = subprocess.run(
                 ['git', 'diff', '--stat', '--unified=3'],
                 capture_output=True,
@@ -375,12 +377,17 @@ class GitOperations:
                 timeout=30
             )
 
-            # Combine results efficiently
-            total_diff = result.stdout + unstaged_result.stdout
+            # Combine results
+            total_diff = staged_result.stdout + unstaged_result.stdout
 
             if not total_diff.strip():
                 logger.warning("No changes detected in git diff")
                 return ""
+
+            # Handle large diff splitting
+            if split_large_files and len(total_diff) > max_chunk_size:
+                logger.info(f"Large diff detected ({len(total_diff)} characters), splitting into chunks")
+                return self._split_and_process_diff(total_diff, max_chunk_size)
 
             # Validate diff content
             validated_diff = self.validator.validate_git_diff(total_diff)
@@ -392,6 +399,215 @@ class GitOperations:
             raise GitOperationError(f"Failed to get git diff: {e}")
         except subprocess.TimeoutExpired:
             raise GitOperationError("Git diff command timed out")
+
+    def _split_and_process_diff(self, diff: str, max_chunk_size: int) -> str:
+        """
+        Split large diff into manageable chunks and process them.
+        
+        Args:
+            diff: The complete git diff
+            max_chunk_size: Maximum size for each chunk
+            
+        Returns:
+            Processed diff summary
+        """
+        # Split diff into individual file diffs
+        file_diffs = self._split_diff_by_files(diff)
+        
+        # Group files into chunks
+        chunks = []
+        current_chunk = ""
+        current_size = 0
+        
+        for file_diff in file_diffs:
+            file_size = len(file_diff)
+            
+            # If single file is too large, truncate it
+            if file_size > max_chunk_size:
+                truncated_diff = self._truncate_large_file_diff(file_diff, max_chunk_size)
+                if current_chunk:
+                    chunks.append(current_chunk)
+                    current_chunk = ""
+                    current_size = 0
+                chunks.append(truncated_diff)
+                continue
+            
+            # If adding this file would exceed chunk size, start new chunk
+            if current_size + file_size > max_chunk_size and current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = ""
+                current_size = 0
+            
+            current_chunk += file_diff + "\n"
+            current_size += file_size
+        
+        # Add the last chunk if it has content
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        logger.info(f"Split diff into {len(chunks)} chunks")
+        
+        # Process chunks and create summary
+        return self._create_diff_summary(chunks, diff)
+    
+    def _split_diff_by_files(self, diff: str) -> List[str]:
+        """
+        Split git diff into individual file diffs.
+        
+        Args:
+            diff: Complete git diff
+            
+        Returns:
+            List of individual file diffs
+        """
+        # Git diff format: diff --git a/path/to/file b/path/to/file
+        file_diffs = []
+        lines = diff.split('\n')
+        current_diff = []
+        
+        for line in lines:
+            if line.startswith('diff --git '):
+                # Start of new file diff
+                if current_diff:
+                    file_diffs.append('\n'.join(current_diff))
+                    current_diff = []
+                current_diff.append(line)
+            else:
+                current_diff.append(line)
+        
+        # Add the last file diff
+        if current_diff:
+            file_diffs.append('\n'.join(current_diff))
+        
+        return file_diffs
+    
+    def _truncate_large_file_diff(self, file_diff: str, max_size: int) -> str:
+        """
+        Truncate a large file diff to fit within size limits.
+        
+        Args:
+            file_diff: Single file diff
+            max_size: Maximum size for the truncated diff
+            
+        Returns:
+            Truncated diff
+        """
+        if len(file_diff) <= max_size:
+            return file_diff
+        
+        lines = file_diff.split('\n')
+        
+        # Keep the header (diff --git line and index line)
+        header_lines = []
+        content_lines = []
+        
+        for line in lines:
+            if line.startswith('diff --git ') or line.startswith('index '):
+                header_lines.append(line)
+            else:
+                content_lines.append(line)
+        
+        # If no content lines, just return header
+        if not content_lines:
+            return '\n'.join(header_lines)
+        
+        # Calculate how many lines we can keep (approximate)
+        header_size = len('\n'.join(header_lines)) + len('\n')
+        truncation_msg_size = 50  # Approximate size of truncation message
+        available_size = max_size - header_size - truncation_msg_size
+        
+        if available_size <= 0:
+            # If header is too large, just return basic info
+            return f"{header_lines[0]}\n# Large file diff truncated ({len(file_diff)} characters)"
+        
+        # Estimate average line length
+        avg_line_length = sum(len(line) for line in content_lines) / len(content_lines)
+        lines_to_keep = max(1, int(available_size / avg_line_length / 2))  # Half from beginning, half from end
+        
+        if lines_to_keep >= len(content_lines) // 2:
+            # No need to truncate
+            return file_diff
+        
+        beginning = content_lines[:lines_to_keep]
+        end = content_lines[-lines_to_keep:]
+        
+        truncated_diff = '\n'.join(header_lines) + '\n'
+        truncated_diff += '\n'.join(beginning) + '\n'
+        truncated_diff += f"# ... {len(content_lines) - (lines_to_keep * 2)} lines omitted ...\n"
+        truncated_diff += '\n'.join(end)
+        
+        return truncated_diff
+    
+    def _create_diff_summary(self, chunks: List[str], original_diff: str) -> str:
+        """
+        Create a summary from processed diff chunks.
+        
+        Args:
+            chunks: List of diff chunks
+            original_diff: Original complete diff
+            
+        Returns:
+            Summary diff
+        """
+        # Create a summary that includes information about all files
+        summary_lines = []
+        summary_lines.append("# Large commit diff summary")
+        summary_lines.append(f"# Original diff size: {len(original_diff)} characters")
+        summary_lines.append(f"# Split into {len(chunks)} manageable chunks")
+        summary_lines.append("#")
+        
+        # Extract file information from each chunk
+        all_files = []
+        for chunk in chunks:
+            files_in_chunk = self._extract_files_from_diff(chunk)
+            all_files.extend(files_in_chunk)
+        
+        summary_lines.append(f"# Files changed: {len(all_files)}")
+        for file in all_files:
+            summary_lines.append(f"#   - {file}")
+        
+        summary_lines.append("#")
+        summary_lines.append("# Detailed changes (first chunk only):")
+        summary_lines.append("#")
+        
+        # Add the first chunk as representative
+        if chunks:
+            first_chunk = chunks[0]
+            summary_lines.append(first_chunk)
+        
+        if len(chunks) > 1:
+            summary_lines.append("#")
+            summary_lines.append(f"# ... {len(chunks) - 1} additional chunks omitted for brevity")
+            summary_lines.append("# Use individual file commits or review the complete diff separately")
+        
+        result = '\n'.join(summary_lines)
+        logger.info(f"Created diff summary: {len(result)} characters (reduced from {len(original_diff)})")
+        
+        return result
+    
+    def _extract_files_from_diff(self, diff: str) -> List[str]:
+        """
+        Extract file paths from a git diff.
+        
+        Args:
+            diff: Git diff chunk
+            
+        Returns:
+            List of file paths
+        """
+        files = []
+        lines = diff.split('\n')
+        
+        for line in lines:
+            if line.startswith('diff --git '):
+                # Extract file path from diff --git a/path b/path
+                parts = line.split(' ')
+                if len(parts) >= 4:
+                    # Remove a/ and b/ prefixes
+                    file_path = parts[3][2:]  # Remove b/ prefix
+                    files.append(file_path)
+        
+        return files
 
     def validate_staged_changes(self) -> bool:
         """

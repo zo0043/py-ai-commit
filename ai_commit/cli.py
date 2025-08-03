@@ -119,7 +119,7 @@ class AICommitWorkflow:
 
             # Get git diff
             self.progress.show_operation("Analyzing git changes")
-            diff = self.git_ops.get_git_diff()
+            diff = self.git_ops.get_git_diff(split_large_files=True, max_chunk_size=500000)
             if not diff:
                 self.progress.show_warning("No changes detected")
                 return
