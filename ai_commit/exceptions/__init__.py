@@ -4,6 +4,7 @@ AI Commit exceptions module.
 This module defines custom exceptions for the ai-commit tool.
 """
 
+
 class AICommitError(Exception):
     """Base exception for all ai-commit related errors."""
     pass
@@ -36,4 +37,19 @@ class ValidationError(AICommitError):
 
 class FileOperationError(AICommitError):
     """Raised when file operations fail."""
+    pass
+
+
+class PluginError(AICommitError):
+    """Raised when plugin operations fail."""
+    pass
+
+
+class PluginLoadError(PluginError):
+    """Raised when plugin loading fails."""
+    pass
+
+
+class PluginConfigError(PluginError):
+    """Raised when plugin configuration is invalid."""
     pass

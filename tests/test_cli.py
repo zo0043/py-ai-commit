@@ -55,6 +55,9 @@ class TestAICommit(unittest.TestCase):
         """Test branch name extraction with GitOperations"""
         git_ops = GitOperations()
         
+        # Disable cache for testing to avoid caching issues
+        git_ops.disable_cache_for_testing()
+        
         # Test successful branch name retrieval
         mock_run.return_value = MagicMock(stdout="main\n", returncode=0)
         result = git_ops.get_current_branch()
@@ -65,6 +68,9 @@ class TestAICommit(unittest.TestCase):
         mock_run.side_effect = subprocess.CalledProcessError(1, 'git')
         result = git_ops.get_current_branch()
         self.assertIsNone(result)
+        
+        # Re-enable cache
+        git_ops.enable_cache_for_testing()
 
     @patch('ai_commit.git.subprocess.run')
     def test_git_operations_validate_staged_changes(self, mock_run):
@@ -86,17 +92,27 @@ class TestAICommit(unittest.TestCase):
         """Test getting changed files with GitOperations"""
         git_ops = GitOperations()
         
-        # Mock the three subprocess calls
-        mock_run.side_effect = [
-            MagicMock(stdout="file1.py\nfile2.py\n", returncode=0),  # staged files
-            MagicMock(stdout="file3.py\n", returncode=0),           # unstaged files
-            MagicMock(stdout="file4.py\n", returncode=0)            # untracked files
-        ]
+        # Disable cache for testing to avoid caching issues
+        git_ops.disable_cache_for_testing()
+        
+        # Mock the single subprocess call with git status --porcelain output
+        # Format: XY filename (X=staged, Y=unstaged)
+        mock_run.return_value = MagicMock(
+            stdout="M  file1.py\nA  file2.py\n M file3.py\n?? file4.py\n",
+            returncode=0
+        )
         
         staged, unstaged = git_ops.get_changed_files()
         
-        self.assertEqual(staged, ['file1.py', 'file2.py'])
+        # Should return staged files and combined unstaged files
+        # file1.py and file2.py are staged (M and A)
+        # file3.py has unstaged changes (M in second position)
+        # file4.py is untracked (??)
+        self.assertEqual(set(staged), {'file1.py', 'file2.py'})
         self.assertEqual(set(unstaged), {'file3.py', 'file4.py'})
+        
+        # Re-enable cache
+        git_ops.enable_cache_for_testing()
 
     @patch('ai_commit.git.subprocess.run')
     def test_git_operations_stage_files(self, mock_run):

@@ -1,0 +1,51 @@
+# AI Commit Plugin Configuration
+
+# 插件目录
+plugin_directories:
+  - plugins
+  - /usr/local/lib/ai-commit/plugins
+
+# 自动加载插件
+auto_load: true
+
+# 严格验证模式
+strict_validation: true
+
+# 启用的插件
+enabled_plugins:
+  - pre_commit_hook
+  - commit_message_enhancer
+  - slack_integration
+
+# 禁用的插件
+disabled_plugins:
+  # - example_plugin
+
+# 插件配置
+plugin_configs:
+  pre_commit_hook:
+    check_code_quality: true
+    check_commit_message: true
+    max_file_size: 1048576  # 1MB
+    forbidden_patterns:
+      - TODO
+      - FIXME
+      - HACK
+      - XXX
+  
+  commit_message_enhancer:
+    add_file_count: true
+    add_branch_info: true
+    add_issue_numbers: true
+    max_message_length: 200
+    format_template: "{type}{scope}: {description}"
+  
+  slack_integration:
+    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    channel: "#commits"
+    username: "AI Commit"
+    icon_emoji: ":git:"
+    notify_on_commit: true
+    notify_on_push: true
+    include_diff_stats: true
+    include_file_list: false
