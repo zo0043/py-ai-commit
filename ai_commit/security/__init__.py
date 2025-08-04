@@ -200,21 +200,45 @@ class InputValidator:
         """
         # Use only the most reliable patterns to reduce false positives
         critical_patterns = [
-            r'(?i)sk-[a-zA-Z0-9\-_]{32,}',  # OpenAI API key pattern
-            r'(?i)ghp_[a-zA-Z0-9]{36}',      # GitHub personal access token
-            r'(?i)(AKIA[0-9A-Z]{16})',       # AWS access key pattern
-            r'(?i)xoxb-[a-zA-Z0-9\-]{40,}',  # Slack token pattern
+            (r'(?i)sk-[a-zA-Z0-9\-_]{32,}', 'OpenAI API Key'),
+            (r'(?i)ghp_[a-zA-Z0-9]{36}', 'GitHub Personal Access Token'),
+            (r'(?i)(AKIA[0-9A-Z]{16})', 'AWS Access Key'),
+            (r'(?i)xoxb-[a-zA-Z0-9\-]{40,}', 'Slack Token'),
         ]
-
-        for pattern in critical_patterns:
-            if re.search(pattern, content):
+        
+        sensitive_details = []
+        
+        for pattern, sensitive_type in critical_patterns:
+            matches = list(re.finditer(pattern, content))
+            if matches:
                 logger.warning(
                     f"Sensitive data pattern detected in {content_type}", extra={
                         'details': 'Security validation triggered'})
-                raise ValidationError(
-                    f"Potential sensitive information detected in {content_type}. "
-                    "Please review and remove any API keys, tokens, or passwords."
-                )
+                
+                # Collect details for each match
+                for match in matches:
+                    # Find line number for the match
+                    line_start = content.rfind('\n', 0, match.start()) + 1
+                    line_end = content.find('\n', match.end())
+                    if line_end == -1:
+                        line_end = len(content)
+                    
+                    line_content = content[line_start:line_end].strip()
+                    line_number = content[:line_start].count('\n') + 1
+                    
+                    sensitive_details.append({
+                        'type': sensitive_type,
+                        'content': line_content,
+                        'line_number': line_number,
+                        'match': match.group()
+                    })
+        
+        if sensitive_details:
+            raise ValidationError(
+                f"Potential sensitive information detected in {content_type}. "
+                "Please review and remove any API keys, tokens, or passwords.",
+                sensitive_details=sensitive_details
+            )
 
 
 class SecureLogger:

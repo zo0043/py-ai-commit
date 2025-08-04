@@ -219,6 +219,71 @@ class AICommitWorkflow:
         except GitOperationError as e:
             self.progress.show_warning(f"推送失败: {e}")
 
+    def _handle_sensitive_content_confirmation(self, error: ValidationError) -> bool:
+        """
+        Handle sensitive content confirmation with user.
+        
+        Args:
+            error: ValidationError containing sensitive content details
+            
+        Returns:
+            bool: True if user confirms to continue, False to cancel
+        """
+        # Display sensitive content warning
+        StatusDisplay.show_header("⚠️  敏感内容检测", "发现可能的敏感信息")
+        
+        print(f"\n{Colors.YELLOW}🔍 检测到 {len(error.sensitive_details)} 处可能的敏感内容：{Colors.RESET}")
+        
+        # Show each sensitive content detail (limit to first 3 for better UX)
+        show_details = error.sensitive_details[:3]
+        for i, detail in enumerate(show_details, 1):
+            print(f"\n{Colors.RED}【{i}】{detail['type']}{Colors.RESET}")
+            print(f"   📍 位置：第 {detail['line_number']} 行")
+            print(f"   📄 内容：{detail['content']}")
+            print(f"   🔑 匹配：{detail['match'][:20]}...")
+        
+        # Show count if there are more
+        if len(error.sensitive_details) > 3:
+            print(f"\n{Colors.YELLOW}... 还有 {len(error.sensitive_details) - 3} 处敏感内容{Colors.RESET}")
+        
+        print(f"\n{Colors.YELLOW}⚠️  警告：这些内容可能包含敏感信息，请确认是否继续提交。{Colors.RESET}")
+        
+        # Provide options
+        print(f"\n{Colors.CYAN}请选择操作：{Colors.RESET}")
+        print(f"  {Colors.GREEN}1. 继续提交{Colors.RESET} - 我确认这些内容不是敏感信息")
+        print(f"  {Colors.YELLOW}2. 取消提交{Colors.RESET} - 我需要先修改这些内容")
+        print(f"  {Colors.RED}3. 查看详情{Colors.RESET} - 显示完整的敏感信息")
+        
+        while True:
+            try:
+                choice = input(f"\n{Colors.CYAN}请输入选项 (1/2/3): {Colors.RESET}").strip()
+                
+                if choice == '1':
+                    # User confirmed to continue
+                    print(f"\n{Colors.GREEN}✅ 用户确认继续提交{Colors.RESET}")
+                    return True
+                elif choice == '2':
+                    # User chose to cancel
+                    print(f"\n{Colors.YELLOW}❌ 用户取消提交{Colors.RESET}")
+                    return False
+                elif choice == '3':
+                    # Show detailed information
+                    print(f"\n{Colors.RED}🔍 敏感内容详情：{Colors.RESET}")
+                    for i, detail in enumerate(error.sensitive_details, 1):
+                        print(f"\n{Colors.BOLD}【{i}】{detail['type']}{Colors.RESET}")
+                        print(f"   行号：{detail['line_number']}")
+                        print(f"   完整内容：{detail['content']}")
+                        print(f"   匹配的敏感信息：{detail['match']}")
+                    print(f"\n{Colors.YELLOW}提示：请检查代码中是否真的包含敏感信息。{Colors.RESET}")
+                else:
+                    print(f"{Colors.RED}无效选项，请输入 1、2 或 3{Colors.RESET}")
+                    
+            except KeyboardInterrupt:
+                print(f"\n{Colors.YELLOW}操作已取消{Colors.RESET}")
+                return False
+            except Exception as e:
+                print(f"{Colors.RED}输入错误：{e}{Colors.RESET}")
+
     def _handle_error(self, error: Exception) -> None:
         """Handle different types of errors with appropriate messages."""
         if isinstance(error, ConfigurationError):
@@ -230,7 +295,16 @@ class AICommitWorkflow:
         elif isinstance(error, SecurityError):
             self.progress.show_error(f"Security error: {error}")
         elif isinstance(error, ValidationError):
-            self.progress.show_error(f"Validation error: {error}")
+            # Handle validation errors with potential sensitive content confirmation
+            if hasattr(error, 'has_sensitive_content') and error.has_sensitive_content():
+                if self._handle_sensitive_content_confirmation(error):
+                    # User confirmed to continue, don't exit
+                    return
+                else:
+                    # User chose to cancel, show error and exit
+                    self.progress.show_error(f"Validation error: {error}")
+            else:
+                self.progress.show_error(f"Validation error: {error}")
         else:
             self.progress.show_error(f"Unexpected error: {error}")
 

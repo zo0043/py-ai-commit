@@ -6,7 +6,8 @@
       "Bash(env:*)",
       "Bash(find:*)",
       "Bash(pip show:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(rm:*)"
     ]
   }
 }

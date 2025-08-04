@@ -32,7 +32,22 @@ class SecurityError(AICommitError):
 
 class ValidationError(AICommitError):
     """Raised when input validation fails."""
-    pass
+    
+    def __init__(self, message: str, sensitive_details: list = None):
+        """
+        Initialize ValidationError with optional sensitive content details.
+        
+        Args:
+            message: Error message
+            sensitive_details: List of sensitive content details (optional)
+                           Each detail is a dict with 'type', 'content', 'line_number' keys
+        """
+        super().__init__(message)
+        self.sensitive_details = sensitive_details or []
+        
+    def has_sensitive_content(self) -> bool:
+        """Check if this error contains sensitive content details."""
+        return len(self.sensitive_details) > 0
 
 
 class FileOperationError(AICommitError):
