@@ -227,12 +227,7 @@ class ConfigurationLoader:
 
     def _load_from_environment(self) -> Dict[str, str]:
         """Load configuration from environment variables."""
-        config = {}
-        for key in self.ENV_VARS:
-            value = os.getenv(key)
-            if value:
-                config[key] = value
-        return config
+        return self._get_environment_config()
 
     def _load_from_secure_storage(self) -> Dict[str, str]:
         """Load API key from secure storage."""
@@ -243,6 +238,69 @@ class ConfigurationLoader:
         except Exception as e:
             logger.debug(f"Could not load from secure storage: {e}")
         return {}
+
+    def _check_environment_variables(self) -> bool:
+        """
+        Check if required environment variables are configured.
+        
+        Returns:
+            True if environment variables are configured, False otherwise
+        """
+        # Check for ANTHROPIC_* variables (primary)
+        anthropic_vars = [
+            'ANTHROPIC_AUTH_TOKEN',
+            'ANTHROPIC_BASE_URL',
+            'ANTHROPIC_MODEL'
+        ]
+        
+        # Check for OPENAI_* variables (fallback)
+        openai_vars = [
+            'OPENAI_API_KEY',
+            'OPENAI_BASE_URL',
+            'OPENAI_MODEL'
+        ]
+        
+        # Check if either set is configured
+        anthropic_configured = all(var in os.environ for var in anthropic_vars)
+        openai_configured = all(var in os.environ for var in openai_vars)
+        
+        return anthropic_configured or openai_configured
+
+    def _get_environment_config(self) -> Dict[str, str]:
+        """
+        Get configuration from environment variables with mapping.
+        
+        Returns:
+            Configuration dictionary with mapped variable names
+        """
+        config = {}
+        
+        # Map ANTHROPIC_* variables to OPENAI_* variables
+        if 'ANTHROPIC_AUTH_TOKEN' in os.environ:
+            config['OPENAI_API_KEY'] = os.environ['ANTHROPIC_AUTH_TOKEN']
+        elif 'OPENAI_API_KEY' in os.environ:
+            config['OPENAI_API_KEY'] = os.environ['OPENAI_API_KEY']
+            
+        if 'ANTHROPIC_BASE_URL' in os.environ:
+            config['OPENAI_BASE_URL'] = os.environ['ANTHROPIC_BASE_URL']
+        elif 'OPENAI_BASE_URL' in os.environ:
+            config['OPENAI_BASE_URL'] = os.environ['OPENAI_BASE_URL']
+            
+        if 'ANTHROPIC_MODEL' in os.environ:
+            config['OPENAI_MODEL'] = os.environ['ANTHROPIC_MODEL']
+        elif 'OPENAI_MODEL' in os.environ:
+            config['OPENAI_MODEL'] = os.environ['OPENAI_MODEL']
+        
+        # Add optional variables
+        for env_var, config_key in [
+            ('LOG_PATH', 'LOG_PATH'),
+            ('AUTO_COMMIT', 'AUTO_COMMIT'),
+            ('AUTO_PUSH', 'AUTO_PUSH')
+        ]:
+            if env_var in os.environ:
+                config[config_key] = os.environ[env_var]
+        
+        return config
 
     def _find_config_files(
             self, config_path: Optional[str] = None) -> Tuple[Optional[str], Optional[Path]]:
@@ -273,11 +331,17 @@ class ConfigurationLoader:
             elif env_file.exists():
                 return ('env', env_file)
             elif template_file.exists():
-                raise ConfigurationError(
-                    "Found .aicommit_template file. Please configure it and rename to .aicommit"
-                )
+                # Check if environment variables are available as fallback
+                if not self._check_environment_variables():
+                    raise ConfigurationError(
+                        "Found .aicommit_template file. Please configure it and rename to .aicommit"
+                    )
 
             current = current.parent
+
+        # Only check environment variables if no config files found
+        if self._check_environment_variables():
+            return ('environment', None)
 
         return (None, None)
 
@@ -294,7 +358,9 @@ class ConfigurationLoader:
         """
         config = {}
         try:
-            if config_type in ('aicommit', 'custom'):
+            if config_type == 'environment':
+                config = self._get_environment_config()
+            elif config_type in ('aicommit', 'custom'):
                 config = self._load_aicommit_config(config_file)
             else:  # env file
                 load_dotenv(config_file)
@@ -368,8 +434,7 @@ class ConfigurationLoader:
             missing_fields = [field for field in required_fields if field not in processed_config]
             if missing_fields:
                 raise ConfigurationError(
-                    f"Missing required configuration: {
-                        ', '.join(missing_fields)}")
+                    f"Missing required configuration: {', '.join(missing_fields)}")
             raise ConfigurationError(f"Invalid configuration: {e}")
 
     def _show_configuration_help(self) -> None:

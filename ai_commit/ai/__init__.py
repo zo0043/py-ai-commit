@@ -171,8 +171,7 @@ Generate only the commit message, wrapped in triple backticks."""
                 if attempt < self.config.max_retries - 1:
                     wait_time = 2 ** attempt  # Exponential backoff
                     logger.warning(
-                        f"Rate limit hit (attempt {
-                            attempt + 1}), waiting {wait_time}s...")
+                        f"Rate limit hit (attempt {attempt + 1}), waiting {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     logger.error("Rate limit exceeded after all retries")
@@ -363,8 +362,7 @@ Generate only the commit message, wrapped in triple backticks."""
 
         for attempt in range(self.config.max_retries):
             try:
-                logger.info(f"Calling OpenAI API asynchronously (attempt {
-                            attempt + 1}/{self.config.max_retries})")
+                logger.info(f"Calling OpenAI API asynchronously (attempt {attempt + 1}/{self.config.max_retries})")
 
                 # Run the blocking OpenAI call in a thread pool
                 response = await asyncio.get_event_loop().run_in_executor(
@@ -400,8 +398,7 @@ Generate only the commit message, wrapped in triple backticks."""
                 if attempt < self.config.max_retries - 1:
                     wait_time = min(2 ** attempt, 30)  # Exponential backoff
                     logger.warning(
-                        f"Rate limit hit (attempt {
-                            attempt + 1}), waiting {wait_time}s...")
+                        f"Rate limit hit (attempt {attempt + 1}), waiting {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
                 break
@@ -410,8 +407,7 @@ Generate only the commit message, wrapped in triple backticks."""
                 if attempt < self.config.max_retries - 1:
                     wait_time = min(2 ** attempt, 30)
                     logger.warning(
-                        f"API call failed (attempt {
-                            attempt + 1}), waiting {wait_time}s...")
+                        f"API call failed (attempt {attempt + 1}), waiting {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
                 break

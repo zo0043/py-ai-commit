@@ -121,9 +121,7 @@ class InputValidator:
 
         if len(diff) > cls.MAX_DIFF_SIZE:
             raise ValidationError(
-                f"Git diff too large: {
-                    len(diff)} bytes (max: {
-                    cls.MAX_DIFF_SIZE})")
+                f"Git diff too large: {len(diff)} bytes (max: {cls.MAX_DIFF_SIZE})")
 
         # Simplified validation - use single consistent check
         cls._check_for_sensitive_data_strict(diff, "git diff")
@@ -151,9 +149,7 @@ class InputValidator:
 
         if len(message) > cls.MAX_COMMIT_MESSAGE_LENGTH:
             raise ValidationError(
-                f"Commit message too long: {
-                    len(message)} chars (max: {
-                    cls.MAX_COMMIT_MESSAGE_LENGTH})"
+                f"Commit message too long: {len(message)} chars (max: {cls.MAX_COMMIT_MESSAGE_LENGTH})"
             )
 
         # Check for sensitive information in commit message
