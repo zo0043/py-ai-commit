@@ -4,7 +4,7 @@
 
 **English** | [简体中文](README_CN.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/zero0043/py-ai-commit/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/zero0043/py-ai-commit/releases)
 [![Python](https://img.shields.io/badge/python-3.8+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
@@ -37,6 +37,7 @@
 - **Auto-push**: Automatically push after successful commits
 - **Dry-run Mode**: Preview commit messages without actual commits
 - **Flexible Configuration**: Environment variables, config files, and CLI overrides
+- **Global Configuration**: `~/.aicommit` for system-wide settings (NEW in v0.3.0)
 
 ## 🚀 Installation
 
@@ -178,7 +179,19 @@ The large commit handling is configurable:
 
 You can configure the tool in multiple ways (in order of priority):
 
-### 1. Environment Variables (Always available)
+### 1. Global Configuration (NEW in v0.3.0)
+
+Create a `~/.aicommit` file in your home directory for system-wide settings:
+
+```bash
+# ~/.aicommit
+OPENAI_API_KEY=your_global_api_key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-3.5-turbo
+LOG_PATH=.commitLogs
+```
+
+### 2. Environment Variables (Always available)
 
 Set these environment variables in your shell:
 
@@ -191,7 +204,7 @@ export AUTO_COMMIT='false'                 # Optional
 export AUTO_PUSH='false'                   # Optional
 ```
 
-### 2. Configuration Files
+### 3. Configuration Files
 
 Create a `.aicommit` or `.env` file in your project root or any parent directory.
 
@@ -213,17 +226,19 @@ AUTO_PUSH=true                       # Optional: Auto push after commit (default
 ```
 
 The tool will search for configuration files in the following order:
-1. Environment variables (always checked as fallback)
-2. Command-line specified config file (`-c` option)
+1. Command-line specified config file (`-c` option)
+2. **Global config file** (`~/.aicommit`) - NEW in v0.3.0
 3. `.aicommit` in current or parent directories
 4. `.env` in current or parent directories
+5. Environment variables (always checked as fallback)
 
-### Configuration Priority
+### Configuration Priority (v0.3.0)
 
 Configuration values are applied in this order (highest to lowest priority):
 1. Command-line arguments (highest priority)
-2. Configuration file settings (.aicommit or .env)
-3. Environment variables (lowest priority)
+2. **Global Configuration** (`~/.aicommit`) - NEW in v0.3.0
+3. Local Configuration files (`.aicommit` or `.env`)
+4. Environment variables (lowest priority)
 
 ## 🔍 Features in Detail
 

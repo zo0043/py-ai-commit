@@ -1,0 +1,6 @@
+OPENAI_API_KEY=e6ec35fc44613abc65e8ca5882386116.OXu1c1neWP3jOmaA
+OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+OPENAI_MODEL=glm-4-flash
+LOG_PATH=.commitLogs
+AUTO_COMMIT=true
+AUTO_PUSH=true

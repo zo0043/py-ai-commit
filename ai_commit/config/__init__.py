@@ -65,6 +65,10 @@ class AICommitConfig:
     timeout: int = 30
     use_secure_storage: bool = True
 
+    # Configuration source information
+    config_source: str = "unknown"
+    config_file_path: Optional[str] = None
+
     # Internal settings
     _api_key_manager: Optional[APIKeyManager] = field(default=None, init=False)
 
@@ -131,7 +135,7 @@ class AICommitConfig:
         Returns:
             Dictionary with masked sensitive information
         """
-        return {
+        config_dict = {
             'openai_api_key': mask_api_key(self.openai_api_key),
             'openai_base_url': self.openai_base_url,
             'openai_model': self.openai_model,
@@ -141,7 +145,13 @@ class AICommitConfig:
             'max_retries': self.max_retries,
             'timeout': self.timeout,
             'use_secure_storage': self.use_secure_storage,
+            'config_source': self.config_source,
         }
+        
+        if self.config_file_path:
+            config_dict['config_file_path'] = self.config_file_path
+            
+        return config_dict
 
     def store_api_key_securely(self) -> None:
         """Store API key in secure storage if enabled."""
@@ -156,6 +166,10 @@ class AICommitConfig:
 class ConfigurationLoader:
     """Handles loading configuration from various sources."""
 
+    # Configuration file constants
+    CONFIG_FILE_NAMES = ['.aicommit', '.env', '.aicommit_template']
+    GLOBAL_CONFIG_FILE = '.aicommit'
+    
     ENV_VARS = [
         'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
         'LOG_PATH', 'AUTO_COMMIT', 'AUTO_PUSH', 'MAX_RETRIES', 'TIMEOUT'
@@ -223,7 +237,7 @@ class ConfigurationLoader:
         self._check_configuration_conflicts(config)
 
         # 7. Convert and validate configuration
-        return self._create_config_object(config)
+        return self._create_config_object(config, config_type, config_file)
 
     def _load_from_environment(self) -> Dict[str, str]:
         """Load configuration from environment variables."""
@@ -302,10 +316,42 @@ class ConfigurationLoader:
         
         return config
 
+    def _check_config_files_in_directory(self, directory: Path) -> Tuple[Optional[str], Optional[Path]]:
+        """
+        Check for configuration files in a specific directory.
+
+        Args:
+            directory: Directory path to check
+
+        Returns:
+            Tuple of (config_type, config_file_path) if found, (None, None) otherwise
+        """
+        aicommit_file = directory / self.CONFIG_FILE_NAMES[0]  # .aicommit
+        env_file = directory / self.CONFIG_FILE_NAMES[1]        # .env
+        template_file = directory / self.CONFIG_FILE_NAMES[2]   # .aicommit_template
+
+        if aicommit_file.exists():
+            return ('aicommit', aicommit_file)
+        elif env_file.exists():
+            return ('env', env_file)
+        elif template_file.exists():
+            # Check if environment variables are available as fallback
+            if not self._check_environment_variables():
+                raise ConfigurationError(
+                    "Found .aicommit_template file. Please configure it and rename to .aicommit"
+                )
+
+        return (None, None)
+
     def _find_config_files(
             self, config_path: Optional[str] = None) -> Tuple[Optional[str], Optional[Path]]:
         """
         Find configuration files.
+
+        Configuration priority (highest to lowest):
+        1. Global config file (~/.aicommit)
+        2. Local config files (.aicommit, .env) in current or parent directories
+        3. Environment variables
 
         Args:
             config_path: Optional specific config file path
@@ -320,29 +366,27 @@ class ConfigurationLoader:
             else:
                 raise ConfigurationError(f"Config file not found: {config_path}")
 
+        # 1. Check global config file first (highest priority)
+        global_config = Path.home() / self.GLOBAL_CONFIG_FILE
+        if global_config.exists():
+            logger.debug(f"Found global config file: {global_config}")
+            return ('global_aicommit', global_config)
+
+        # 2. Check local config files in current and parent directories
         current = Path.cwd()
         while current != current.parent:
-            aicommit_file = current / '.aicommit'
-            env_file = current / '.env'
-            template_file = current / '.aicommit_template'
-
-            if aicommit_file.exists():
-                return ('aicommit', aicommit_file)
-            elif env_file.exists():
-                return ('env', env_file)
-            elif template_file.exists():
-                # Check if environment variables are available as fallback
-                if not self._check_environment_variables():
-                    raise ConfigurationError(
-                        "Found .aicommit_template file. Please configure it and rename to .aicommit"
-                    )
-
+            config_type, config_file = self._check_config_files_in_directory(current)
+            if config_type and config_file:
+                logger.debug(f"Found local config file: {config_file}")
+                return (config_type, config_file)
             current = current.parent
 
-        # Only check environment variables if no config files found
+        # 3. Only check environment variables if no config files found
         if self._check_environment_variables():
+            logger.debug("Using environment variables for configuration")
             return ('environment', None)
 
+        logger.debug("No configuration found")
         return (None, None)
 
     def _load_from_file(self, config_type: str, config_file: Path) -> Dict[str, str]:
@@ -360,7 +404,7 @@ class ConfigurationLoader:
         try:
             if config_type == 'environment':
                 config = self._get_environment_config()
-            elif config_type in ('aicommit', 'custom'):
+            elif config_type in ('aicommit', 'custom', 'global_aicommit'):
                 config = self._load_aicommit_config(config_file)
             else:  # env file
                 load_dotenv(config_file)
@@ -392,12 +436,14 @@ class ConfigurationLoader:
 
         return config
 
-    def _create_config_object(self, config: Dict[str, str]) -> AICommitConfig:
+    def _create_config_object(self, config: Dict[str, str], config_type: Optional[str] = None, config_file: Optional[Path] = None) -> AICommitConfig:
         """
         Create AICommitConfig object from configuration dictionary.
 
         Args:
             config: Configuration dictionary
+            config_type: Type of configuration source
+            config_file: Path to configuration file
 
         Returns:
             AICommitConfig object
@@ -427,6 +473,20 @@ class ConfigurationLoader:
                 except ValueError:
                     logger.warning(f"Invalid integer value for {key}: {config[key]}")
 
+        # Add configuration source information
+        if config_type:
+            if config_type == 'global_aicommit':
+                processed_config['config_source'] = 'global'
+            elif config_type == 'aicommit':
+                processed_config['config_source'] = 'local'
+            elif config_type == 'environment':
+                processed_config['config_source'] = 'environment'
+            else:
+                processed_config['config_source'] = config_type
+        
+        if config_file:
+            processed_config['config_file_path'] = str(config_file)
+
         try:
             return AICommitConfig(**processed_config)
         except TypeError as e:
@@ -443,14 +503,20 @@ class ConfigurationLoader:
         print("❌ Configuration Required")
         print("=" * 60)
         print("No configuration found. You can configure ai-commit in multiple ways:")
-        print("\n1. Environment Variables:")
+        print("\n1. Global Configuration File (~/.aicommit):")
+        print("   Create a global configuration file in your home directory")
+        print("   This configuration will be used for all projects")
+        print("\n2. Local Configuration File (.aicommit or .env):")
+        print("   Create a file with your settings in the current directory")
+        print("   This configuration will override global settings")
+        print("\n3. Environment Variables:")
         print("   export OPENAI_API_KEY='your-api-key'")
         print("   export OPENAI_BASE_URL='https://api.openai.com/v1'")
         print("   export OPENAI_MODEL='gpt-3.5-turbo'")
-        print("\n2. Configuration File (.aicommit or .env):")
-        print("   Create a file with your settings in the current directory")
-        print("\n3. Secure Storage:")
+        print("\n4. Secure Storage:")
         print("   Use 'ai-commit config set-key' to store API key securely")
+        print("\n💡 Configuration Priority:")
+        print("   Global Config → Local Config → Environment Variables")
         print("=" * 60)
 
     def _check_configuration_conflicts(self, config: Dict[str, Any]) -> None:
@@ -541,18 +607,22 @@ class ConfigurationLoader:
         return sources if sources else ['none']
 
 
-def create_default_config_file(file_type: str = "aicommit") -> Path:
+def create_default_config_file(file_type: str = "aicommit", global_config: bool = False) -> Path:
     """
     Create a default configuration file template.
 
     Args:
         file_type: Type of config file to create ('aicommit' or 'env')
+        global_config: Whether to create global config file in home directory
 
     Returns:
         Path to created config file
     """
     filename = '.aicommit' if file_type == 'aicommit' else '.env'
-    config_path = Path.cwd() / filename
+    if global_config:
+        config_path = Path.home() / filename
+    else:
+        config_path = Path.cwd() / filename
 
     template_content = """# AI Commit Configuration
 # Copy this file and fill in your settings
