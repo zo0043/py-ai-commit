@@ -37,7 +37,9 @@
 - **Auto-push**: Automatically push after successful commits
 - **Dry-run Mode**: Preview commit messages without actual commits
 - **Flexible Configuration**: Environment variables, config files, and CLI overrides
-- **Global Configuration**: `~/.aicommit` for system-wide settings (NEW in v0.3.0)
+- **Global Configuration**: `~/.aicommit` for system-wide settings (v0.3.0)
+- **Sensitive Content Detection**: Automatic detection and user confirmation for sensitive data (v0.3.0)
+- **Plugin Architecture**: Extensible plugin system for commit message enhancement (v0.3.0)
 
 ## 🚀 Installation
 
@@ -103,6 +105,21 @@ ai-commit -a
 
 # Interactive selection with dry-run (no actual commit)
 ai-commit -i --dry-run
+```
+
+### Configuration Management Commands
+
+The tool includes built-in configuration management:
+
+```bash
+# Show current configuration
+ai-commit config show
+
+# Test AI service connection
+ai-commit config test
+
+# Store API key securely
+ai-commit config set-key openai your-api-key
 ```
 
 Command line options:
@@ -236,9 +253,28 @@ The tool will search for configuration files in the following order:
 
 Configuration values are applied in this order (highest to lowest priority):
 1. Command-line arguments (highest priority)
-2. **Global Configuration** (`~/.aicommit`) - NEW in v0.3.0
+2. Global Configuration (`~/.aicommit`)
 3. Local Configuration files (`.aicommit` or `.env`)
 4. Environment variables (lowest priority)
+
+### Advanced Configuration Options
+
+Additional configuration options available:
+
+```ini
+# Large file handling
+split_large_files=true          # Enable/disable large file splitting (default: true)
+max_chunk_size=500000           # Maximum chunk size in characters (default: 500000)
+MAX_DIFF_SIZE=10485760          # Maximum diff size in bytes (default: 10MB)
+
+# Plugin configuration
+plugin_enabled=true             # Enable plugin system (default: true)
+plugin_path=./plugins           # Plugin directory path
+
+# Security settings
+sensitive_content_detection=true  # Enable sensitive content detection (default: true)
+strict_validation=true           # Enable strict input validation (default: true)
+```
 
 ## 🔍 Features in Detail
 
@@ -278,9 +314,31 @@ Enable detailed logging:
 ai-commit -v
 ```
 
-### Branch Context
+### Sensitive Content Detection
 
-The tool automatically includes the current branch name in the commit message generation context for more relevant messages.
+The tool automatically detects sensitive content in your code and prompts for confirmation:
+
+- **API Keys**: Detects potential API keys and tokens
+- **Passwords**: Identifies possible password strings
+- **Personal Information**: Detects email addresses, phone numbers
+- **Secret Files**: Identifies configuration files with sensitive data
+- **User Confirmation**: Interactive prompts to review and confirm sensitive content
+
+When sensitive content is detected, you can:
+1. **Continue Commit**: Confirm the content is not sensitive
+2. **Cancel Commit**: Review and remove sensitive information
+3. **View Details**: See detailed information about detected content
+
+### Plugin System
+
+The v0.3.0 release introduces an extensible plugin architecture:
+
+- **Commit Message Enhancers**: Modify and improve generated commit messages
+- **Pre-commit Hooks**: Validate changes before committing
+- **Post-commit Actions**: Execute actions after successful commits
+- **Custom Validators**: Add project-specific validation rules
+
+Plugins can be developed using the provided plugin API and stored in the configured plugin directory.
 
 ## 📝 Logging
 
@@ -307,7 +365,49 @@ The tool includes robust error handling for:
 - Large commit processing errors
 - Push failures
 
-## 🏗️ Architecture
+### Advanced Usage Examples
+
+```bash
+# Global configuration setup
+echo 'OPENAI_API_KEY=your-key' > ~/.aicommit
+echo 'OPENAI_MODEL=gpt-4' >> ~/.aicommit
+
+# Test configuration
+ai-commit config show
+ai-commit config test
+
+# Large project with auto-commit and verbose logging
+ai-commit -a -y -v
+
+# Interactive selection with sensitive content detection
+ai-commit -i
+
+# Dry run with custom model
+ai-commit --dry-run -m gpt-4
+
+# Auto-stage and commit with branch-specific configuration
+ai-commit -a -c ./project-specific-config
+```
+
+### Workflow Integration
+
+```bash
+# Git hook integration (pre-commit)
+#!/bin/bash
+# .git/hooks/pre-commit
+ai-commit -y --dry-run
+if [ $? -eq 0 ]; then
+    echo "AI commit message validation passed"
+else
+    echo "AI commit message validation failed"
+    exit 1
+fi
+
+# CI/CD pipeline integration
+ai-commit --dry-run -c ./ci-config
+COMMIT_MSG=$(ai-commit --dry-run | tail -1)
+echo "Generated commit message: $COMMIT_MSG"
+```
 
 This project features a modern modular architecture with the following components:
 
